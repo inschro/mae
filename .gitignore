@@ -1,0 +1,13 @@
+# environment directory
+*-env
+
+# cache
+__pycache__
+
+checkpoint
+*.pth
+*.pt
+
+# data
+data/
+
