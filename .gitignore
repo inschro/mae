@@ -4,10 +4,13 @@
 # cache
 __pycache__
 
-checkpoint
+#checkpoint
 *.pth
 *.pt
 
 # data
 data/
 
+# job dir
+jobs/
+job/
