@@ -157,9 +157,10 @@ class MaskedAutoencoderViT(nn.Module):
 
         # compute entropy
         entropies = self.entropy(x)  # [N, L]
+        print(entropies.shape)
 
         # sort by entropy
-        ids_shuffle = torch.argsort(entropies, dim=1)
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
@@ -174,27 +175,64 @@ class MaskedAutoencoderViT(nn.Module):
         return x_masked, mask, ids_restore
     
     @staticmethod
-    def entropy(x):
+    def entropy_(x):
         """
         Calculate the entropy for a batch of sequences.
-        
+        ChatGPT spat this out, i have no idea why, but it works surprisingly well and fast.
+
         Args:
             x: Tensor of shape [N, L, D], where N is batch size, L is sequence length, and D is feature dimension.
-        
+
         Returns:
             entropies: Tensor of shape [N, L] containing the entropy values for each sequence element.
         """
-        # Normalize the input tensor along the feature dimension
-        x = x - x.min(dim=-1, keepdim=True)[0]
-        x = x / (x.sum(dim=-1, keepdim=True) + 1e-6)
+        # Apply softmax to convert the feature values into probabilities
+        probs = torch.softmax(x, dim=-1) # ???
         
         # Calculate log probabilities
-        log_p = torch.log(x + 1e-6)
+        log_probs = torch.log(probs + 1e-6)
         
         # Calculate entropy
-        entropies = -torch.sum(x * log_p, dim=-1)
+        entropies = -torch.sum(probs * log_probs, dim=-1)
         
-        return entropies
+        return -entropies
+    
+    
+    @staticmethod
+    def entropy(tensor, dim=-1, num_bins=10):
+        """
+        Calculate the entropy of a tensor along a specified dimension.
+
+        Args:
+        tensor (torch.Tensor): Input tensor.
+        dim (int): Dimension along which to calculate the entropy. Default is the last dimension.
+        num_bins (int): Number of bins to quantize the tensor values.
+
+        Returns:
+        torch.Tensor: Tensor containing entropy values along the specified dimension.
+        """
+        # Normalize the tensor to range [0, 1]
+        min_val, _ = torch.min(tensor, dim=dim, keepdim=True)
+        max_val, _ = torch.max(tensor, dim=dim, keepdim=True)
+        normalized_tensor = (tensor - min_val) / (max_val - min_val + 1e-9)
+
+        # Quantize the tensor
+        quantized_tensor = torch.floor(normalized_tensor * (num_bins - 1)).long()
+
+        # Calculate the counts of each unique value along the specified dimension
+        unique_vals, inverse_indices = torch.unique(quantized_tensor, sorted=True, return_inverse=True)
+        counts = torch.zeros_like(quantized_tensor, dtype=torch.float).scatter_add_(dim, inverse_indices, torch.ones_like(inverse_indices, dtype=torch.float))
+
+        # Calculate probabilities
+        probs = counts / counts.sum(dim=dim, keepdim=True)
+        
+        # Calculate the log of the probabilities
+        log_probs = torch.log(probs + 1e-9)  # Add a small value to avoid log(0)
+        
+        # Calculate the entropy
+        entropy = -torch.sum(probs * log_probs, dim=dim)
+        
+        return entropy
 
     def forward_encoder(self, x, mask_ratio, masking='random'):
         # embed patches
