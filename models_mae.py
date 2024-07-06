@@ -146,8 +146,57 @@ class MaskedAutoencoderViT(nn.Module):
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
         return x_masked, mask, ids_restore
+    
+    def entropy_masking(self, x, mask_ratio):
+        """
+        Perform per-sample entropy-based masking by sorting by entropy.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape
+        len_keep = int(L * (1 - mask_ratio))
 
-    def forward_encoder(self, x, mask_ratio):
+        # compute entropy
+        entropies = self.entropy(x)  # [N, L]
+
+        # sort by entropy
+        ids_shuffle = torch.argsort(entropies, dim=1)
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+    
+    @staticmethod
+    def entropy(x):
+        """
+        Calculate the entropy for a batch of sequences.
+        
+        Args:
+            x: Tensor of shape [N, L, D], where N is batch size, L is sequence length, and D is feature dimension.
+        
+        Returns:
+            entropies: Tensor of shape [N, L] containing the entropy values for each sequence element.
+        """
+        # Normalize the input tensor along the feature dimension
+        x = x - x.min(dim=-1, keepdim=True)[0]
+        x = x / (x.sum(dim=-1, keepdim=True) + 1e-6)
+        
+        # Calculate log probabilities
+        log_p = torch.log(x + 1e-6)
+        
+        # Calculate entropy
+        entropies = -torch.sum(x * log_p, dim=-1)
+        
+        return entropies
+
+    def forward_encoder(self, x, mask_ratio, masking='random'):
         # embed patches
         x = self.patch_embed(x)
 
@@ -155,7 +204,10 @@ class MaskedAutoencoderViT(nn.Module):
         x = x + self.pos_embed[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        if masking == 'random':
+            x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        elif masking == 'entropy':
+            x, mask, ids_restore = self.entropy_masking(x, mask_ratio)
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -213,8 +265,8 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+    def forward(self, imgs, mask_ratio=0.75, masking='random'):
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, masking)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
