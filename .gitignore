@@ -14,3 +14,5 @@ data/
 # job dir
 jobs/
 job/
+output_dir/
+log_dir/

@@ -24,7 +24,7 @@ import torchvision.datasets as datasets
 
 import timm
 
-# assert timm.__version__ == "0.3.2"  # version check
+assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
@@ -52,6 +52,9 @@ def get_args_parser():
 
     parser.add_argument('--mask_ratio', default=0.75, type=float,
                         help='Masking ratio (percentage of removed patches).')
+    
+    parser.add_argument('--masking', default='random', type=str,
+                        help='Masking mode, random or entropy')
 
     parser.add_argument('--norm_pix_loss', action='store_true',
                         help='Use (per-patch) normalized pixels as targets for computing loss')
@@ -125,7 +128,8 @@ def main(args):
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
+    # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train) # from original repo; /train split not needed
     print(dataset_train)
 
     if True:  # args.distributed:
@@ -194,7 +198,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 5 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

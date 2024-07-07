@@ -157,8 +157,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         # compute entropy
         entropies = self.entropy(x)  # [N, L]
-        print(entropies.shape)
-
+        
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
