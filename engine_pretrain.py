@@ -17,6 +17,17 @@ import torch
 import util.misc as misc
 import util.lr_sched as lr_sched
 
+import json
+
+def _parse_masking_args(arg_str: str):
+    print(arg_str)
+    try:
+        masking_args = json.loads(arg_str)
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid masking_args: {arg_str}")
+    return masking_args
+    
+
 
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -28,6 +39,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 100
+    masking_args = _parse_masking_args(args.masking_args)
 
     accum_iter = args.accum_iter
 
@@ -45,7 +57,7 @@ def train_one_epoch(model: torch.nn.Module,
         samples = samples.to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
-            loss, _, _ = model(samples, mask_ratio=args.mask_ratio, masking=args.masking)
+            loss, _, _ = model(samples, masking_type=args.masking_type, **masking_args)
 
         loss_value = loss.item()
 
