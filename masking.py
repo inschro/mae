@@ -15,7 +15,7 @@ class MaskingModule(nn.Module):
         else:
             raise ValueError(f"Unsupported mask type: {masking_type}")
         
-    def random_masking(self, x, masking_ratio=0.75):
+    def random_masking(self, x, masking_ratio=0.75, **kwargs):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -42,7 +42,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_masking(self, x, masking_ratio=0.75):
+    def entropy_masking(self, x, masking_ratio=0.75, **kwargs):
         """
         Perform per-sample entropy-based masking by sorting by entropy.
         x: [N, L, D], sequence
@@ -68,24 +68,34 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_masking_threshold(self, x, threshold=0.5):
+    def entropy_masking_threshold(self, x, threshold=0.5, **kwargs):
         """
-        Perform per-sample threshold-based masking. keep the patches with entropy > threshold.
+        Perform per-sample entropy-based masking by thresholding entropy.
         x: [N, L, D], sequence
+        threshold: float, threshold value for entropy to keep
         """
+        N, L, D = x.shape
 
         # compute entropy
         entropies = self.entropy(x, num_bins=10)
-        
+
+        # sort by entropy
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        len_keep = (entropies > threshold).sum(dim=1)
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
         # generate the binary mask: 0 is keep, 1 is remove
-        mask = entropies < threshold
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
 
-        num_keep = (~mask).sum(dim=1)
+        return x_masked, mask, ids_restore
 
-        ids_keep = torch.argsort(entropies, dim=1, descending=True)[:, :num_keep]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, x.shape[-1]))
 
-        return x_masked, mask, ids_keep
     
     @staticmethod
     def entropy(tensor, dim=-1, num_bins=10):

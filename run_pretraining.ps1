@@ -6,7 +6,7 @@ $newDir = ".\jobs\$timestamp"
 New-Item -ItemType Directory -Force -Path $newDir
 
 # Define masking type and arguments
-$masking_type = "random_masking"
+$masking_type = "entropy_masking"
 $masking_args = @{
     masking_ratio = 0.7
 } | ConvertTo-Json -Compress

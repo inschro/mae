@@ -20,7 +20,6 @@ import util.lr_sched as lr_sched
 import json
 
 def _parse_masking_args(arg_str: str):
-    print(arg_str)
     try:
         masking_args = json.loads(arg_str)
     except json.JSONDecodeError:

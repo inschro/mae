@@ -1,6 +1,8 @@
-from torchinfo import summary
-from models_mae import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
+import torch
+import json
 
-model = mae_vit_base_patch16()
+# load checkpoint
+path = r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240710003215\outputs\checkpoint-5.pth'
+checkpoint = torch.load(path)
 
-summary(model, input_size=(1, 3, 224, 224))
+print(json.dumps(checkpoint, indent=2))

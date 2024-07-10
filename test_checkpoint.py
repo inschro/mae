@@ -4,7 +4,8 @@ import torch
 # checkpoint_path = 'mae_pretrain_vit_base.pth'
 # checkpoint_path = 'mae_finetuned_vit_base.pth'
 # checkpoint_path = 'mae_timm_vit_base.pth'
-checkpoint_path = 'mae_visualize_vit_large.pth'
+# checkpoint_path = 'mae_visualize_vit_large.pth'
+checkpoint_path = r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240710003215\outputs\checkpoint-5.pth'
 state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
 
 # Function to recursively print all keys in a nested dictionary
@@ -14,11 +15,14 @@ def print_keys(d, parent_key=''):
             new_key = f'{parent_key}.{k}' if parent_key else k
             print_keys(v, new_key)
     else:
-        print(d.shape, end='\t\t')
         print(parent_key)
+        if isinstance(d, torch.Tensor): 
+            print(d.shape, end='\t\t')
+        else:
+            print(d, end='\t\t')
 
 # Check if 'model' key exists and is a dictionary
-if 'model' in state_dict:
+if 'model_' in state_dict:
     if isinstance(state_dict['model'], dict):
         print_keys(state_dict['model'])
     else:
