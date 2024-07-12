@@ -18,7 +18,7 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torch import inf
+from numpy import inf
 
 
 class SmoothedValue(object):
