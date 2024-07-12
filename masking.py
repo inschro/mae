@@ -184,7 +184,12 @@ class MaskingModule(nn.Module):
         Returns:
         torch.Tensor: Tensor containing entropy values along the specified dimension.
         """
-        pdf = self.__marginal_pdf_kde(values,bins,sigma)
+        values_min = values.min()
+        values_max = values.max()
+        
+        # Apply min-max normalization
+        normalized_tensor = (values - values_min) / (values_max - values_min)
+        pdf = self.__marginal_pdf_kde(normalized_tensor,bins,sigma)
         entropy = torch.sum(pdf * torch.log(pdf), dim = -1)
         return entropy
 
