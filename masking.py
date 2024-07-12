@@ -3,8 +3,9 @@ from torch import nn
 
 
 class MaskingModule(nn.Module):
-    def __init__(self):
+    def __init__(self, epsilon = 1e-19):
         super(MaskingModule, self).__init__()
+        self.epsilon = epsilon
         
 
     def forward(self, x, masking_type, **masking_args):
@@ -68,6 +69,32 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    def entropy_kde_masking(self, x, masking_ratio=0.75, **kwargs):
+        """
+        Perform per-sample entropy-based masking by sorting by entropy.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape
+        len_keep = int(L * (1 - masking_ratio))
+
+        # compute entropy
+        entropies = self.entropy_kde(x)
+        
+        # sort by entropy
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+    
     def entropy_masking_threshold(self, x, threshold=0.5, **kwargs):
         """
         Perform per-sample entropy-based masking by thresholding entropy.
@@ -95,8 +122,6 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
 
-
-    
     @staticmethod
     def entropy(tensor, dim=-1, num_bins=10):
         """
@@ -132,3 +157,55 @@ class MaskingModule(nn.Module):
         entropy = -torch.sum(probs * log_probs, dim=dim)
         
         return entropy
+    
+    def entropy_kde(self, values: torch.Tensor, bins = torch.linspace(0,1,64) , sigma = torch.tensor(0.01)):
+        """
+        Calculate the entropy of a tensor along a specified dimension.
+
+        Args:
+        tensor (torch.Tensor): Input tensor.
+        dim (int): Dimension along which to calculate the entropy. Default is the last dimension.
+        num_bins (int): Number of bins to quantize the tensor values.
+
+        Returns:
+        torch.Tensor: Tensor containing entropy values along the specified dimension.
+        """
+        pdf = self.__marginal_pdf_kde(values,bins,sigma)
+        entropy = torch.sum(pdf * torch.log(pdf), dim = -1)
+        return entropy
+
+    
+    def __marginal_pdf_kde(self, values: torch.Tensor, bins: torch.Tensor, sigma: torch.Tensor):
+        """
+        Calculates the marginal pdf of a batch of Tensors using kernel density estimation with gaussian kernel.
+
+        Args:
+        values (torch.Tensor): Input tensor of shape (N, P, L).
+        bins (torch.Tensor): Tensor containing bin positions.
+        sigma (torch.Tensor): Standard deviation for the Gaussian kernel.
+
+        Returns:
+        torch.Tensor: Tensor containing estimated marginal pdf of shape (N, P, B).
+        """
+        N, P, L = values.shape
+        B = bins.shape[0]
+        
+        # Expand dimensions of bins and sigma for broadcasting
+        bins = bins.unsqueeze(0).unsqueeze(0).unsqueeze(3)  # Shape: (1, 1, B, 1)
+        sigma = sigma.unsqueeze(0).unsqueeze(0).unsqueeze(2)  # Shape: (1, 1, 1, L)
+        
+        # Calculate residuals
+        residuals = values.unsqueeze(2) - bins  # Shape: (N, P, B, L)
+        
+        # Apply Gaussian kernel
+        kernel_values = torch.exp(-0.5 * (residuals / sigma).pow(2))  # Shape: (N, P, B, L)
+        
+        # Calculate pdf
+        pdf = torch.mean(kernel_values, dim=3)  # Shape: (N, P, B)
+        
+        # Normalize pdf
+        normalization = torch.sum(pdf, dim=2, keepdim=True) + self.epsilon  # Shape: (N, P, 1)
+        pdf = pdf / normalization + self.epsilon  # Shape: (N, P, B)
+        
+        return pdf
+        
