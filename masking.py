@@ -190,7 +190,7 @@ class MaskingModule(nn.Module):
         # Apply min-max normalization
         normalized_tensor = (values - values_min) / (values_max - values_min)
         pdf = self.__marginal_pdf_kde(normalized_tensor,bins,sigma)
-        entropy = torch.sum(pdf * torch.log(pdf), dim = -1)
+        entropy = - torch.sum(pdf * torch.log(pdf), dim = -1)
         return entropy
 
     
