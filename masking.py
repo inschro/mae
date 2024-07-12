@@ -104,6 +104,8 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    
+    
     def entropy_masking_threshold(self, x, threshold=0.5, **kwargs):
         """
         Perform per-sample entropy-based masking by thresholding entropy.
@@ -172,7 +174,7 @@ class MaskingModule(nn.Module):
         
         return entropy
     
-    def entropy_kde(self, values: torch.Tensor, bins = torch.linspace(0,1,64).to('cuda') , sigma = torch.tensor(0.01)): # TODO .to("cuda") this is bad and needs to be fixed ASAP!
+    def entropy_kde(self, values: torch.Tensor, n_bins = 64 , sigma = 0.01): 
         """
         Calculate the entropy of a tensor along a specified dimension.
 
@@ -184,6 +186,8 @@ class MaskingModule(nn.Module):
         Returns:
         torch.Tensor: Tensor containing entropy values along the specified dimension.
         """
+        bins = torch.linspace(0,1,n_bins).to(values.device)
+        sigma = torch.tensor(sigma).to(values.device)
         values_min = values.min()
         values_max = values.max()
         
@@ -192,6 +196,7 @@ class MaskingModule(nn.Module):
         pdf = self.__marginal_pdf_kde(normalized_tensor,bins,sigma)
         entropy = - torch.sum(pdf * torch.log(pdf), dim = -1)
         return entropy
+    
 
     
     def __marginal_pdf_kde(self, values: torch.Tensor, bins: torch.Tensor, sigma: torch.Tensor):
