@@ -43,6 +43,15 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    def random_masking_variable(self, x, masking_ratio_min=0.5, masking_ratio_max=0.75, **kwargs):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+        x: [N, L, D], sequence
+        """
+        masking_ratio = torch.rand(1).item() * (masking_ratio_max - masking_ratio_min) + masking_ratio_min
+        return self.random_masking(x, masking_ratio=masking_ratio, **kwargs)
+    
     def entropy_masking(self, x, masking_ratio=0.75, **kwargs):
         """
         Perform per-sample entropy-based masking by sorting by entropy.
@@ -110,8 +119,13 @@ class MaskingModule(nn.Module):
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
-        # keep the first subset
+        # count the number of tokens to keep, make sure at least one token is kept and at least one token is removed
+        minimum_keep = kwargs.get('minimum_keep', 1)
+        minimum_mask = kwargs.get('minimum_mask', 1)
         len_keep = (entropies > threshold).sum(dim=1)
+        len_keep = torch.clamp(len_keep, min=minimum_keep, max=L - minimum_mask).float().mean().round().long().item()
+        
+        # keep the first subset
         ids_keep = ids_shuffle[:, :len_keep]
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
