@@ -137,7 +137,7 @@ class MaskingModule(nn.Module):
         return x_masked, mask, ids_restore
 
     @staticmethod
-    def entropy(tensor, dim=-1, num_bins=10):
+    def entropy(tensor, dim=-1, num_bins=64):
         """
         Calculate the entropy of a tensor along a specified dimension.
 
@@ -172,7 +172,7 @@ class MaskingModule(nn.Module):
         
         return entropy
     
-    def entropy_kde(self, values: torch.Tensor, bins = torch.linspace(0,1,64) , sigma = torch.tensor(0.01)):
+    def entropy_kde(self, values: torch.Tensor, bins = torch.linspace(0,1,64).to('cuda') , sigma = torch.tensor(0.01)): # TODO .to("cuda") this is bad and needs to be fixed ASAP!
         """
         Calculate the entropy of a tensor along a specified dimension.
 
