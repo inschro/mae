@@ -127,6 +127,8 @@ class MaskedAutoencoderViT(nn.Module):
         return imgs
 
     def forward_encoder(self, x, masking_type, **masking_args):
+        
+        img_pat = self.patchify(x)
         # embed patches
         x = self.patch_embed(x)
 
@@ -134,7 +136,7 @@ class MaskedAutoencoderViT(nn.Module):
         x = x + self.pos_embed[:, 1:, :]
 
         # masking
-        x, mask, ids_restore = self.masking_module(x, masking_type, **masking_args)
+        x, mask, ids_restore = self.masking_module(x,img_pat, masking_type, **masking_args)
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
