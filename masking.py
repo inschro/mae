@@ -78,6 +78,32 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    def frequency_masking(self, x, masking_ratio=0.75, **kwargs):
+        """
+        Perform per-sample frequency-based masking by sorting by frequency.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape
+        len_keep = int(L * (1 - masking_ratio))
+
+        # compute mean frequency
+        mean_frequencies = self.mean_frequency(x)
+        
+        # sort by entropy
+        ids_shuffle = torch.argsort(mean_frequencies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+    
     def entropy_kde_masking(self, x, masking_ratio=0.75, **kwargs):
         """
         Perform per-sample entropy-based masking by sorting by entropy.
@@ -233,3 +259,41 @@ class MaskingModule(nn.Module):
         
         return pdf
         
+    @staticmethod
+    def mean_frequency(in_tensor):
+        """
+        Calculate the mean frequency of each unique value along the specified dimension.
+
+        Args:
+        in_tensor (torch.Tensor): Input tensor. (N, P, L)
+        dim (int): Dimension along which to calculate the mean frequency. Default is the last dimension.
+
+        Returns:
+        torch.Tensor: Tensor containing mean frequency values along the specified dimension. (N, P)
+        """
+        # unshuffle color channels
+        red = in_tensor[:, :, 0::3]
+        green = in_tensor[:, :, 1::3]
+        blue = in_tensor[:, :, 2::3]
+
+        print(in_tensor[0, 0, :20])
+        print(red.shape, green.shape, blue.shape, in_tensor.shape)
+
+        gray = red + green + blue
+
+        # Use fft along the specified dimension
+        frequencies = torch.fft.fft(gray, dim=2)
+        frequencies = torch.abs(frequencies)
+
+        # Calculate the mean frequency
+        mean_frequency = torch.mean(frequencies, dim=2)
+
+        return mean_frequency
+    
+if __name__ == '__main__':
+    # Test the mean frequency
+    x = torch.randn(2, 3, 4)
+    masking = MaskingModule()
+    mean_frequency = masking.mean_frequency(x, dim=-1)
+    print(mean_frequency.shape)
+    print(mean_frequency)

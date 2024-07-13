@@ -100,18 +100,16 @@ show_image(torch.tensor(img))
 
 masking_args = {
     'masking_ratio': 0.6,
-    'threshold': 0.6,
 }
 
-# chkpt_dir = '../mae_visualize_vit_large.pth'
-# model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
-# run_one_image(img, model_mae, masking_type='entropy_masking_threshold', **masking_args)
-# run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
-# run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
+chkpt_dir = './mae_visualize_vit_large.pth'
+model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
+run_one_image(img, model_mae, masking_type='frequency_masking', **masking_args)
 
-chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
-model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
-run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
-#run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
-#run_one_image(img, model_mae, masking_type='entropy_masking_threshold', **masking_args)
-run_one_image(img, model_mae, masking_type='entropy_kde_masking', **masking_args)
+
+# chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
+# model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
+# run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
+# #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
+# #run_one_image(img, model_mae, masking_type='entropy_masking_threshold', **masking_args)
+# run_one_image(img, model_mae, masking_type='entropy_kde_masking', **masking_args)
