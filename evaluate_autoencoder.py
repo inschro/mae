@@ -2,47 +2,91 @@ import argparse
 import os
 import torch
 from torchvision import datasets, transforms
-from models_mae import MaskedAutoencoderViT
-from util.misc import load_checkpoint
+from models_mae import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
+import yaml
+from datetime import datetime
+import json
 
-def evaluate(model, data_loader, device, masking_type, **masking_args):
-	model.eval()
-	total_loss = 0.0
-	with torch.no_grad():
-		for imgs in data_loader:
-			imgs = imgs[0].to(device)  # Assuming imgs is a tuple of (images, targets)
-			loss, _, _ = model(imgs, masking_type, **masking_args)
-			total_loss += loss.item()
-	avg_loss = total_loss / len(data_loader)
-	return avg_loss
+def log_evaluation_header(eval_config, log_file, checkpoint=None):
+    log_file.write(f"EVALUATION OF MAE AUTOENCODER\n\n")
+    log_file.write(f"Evaluation configuration:\n{json.dumps(eval_config, indent=2)}\n\n")
+    
+    if checkpoint is not None:
+        if checkpoint.get('epoch') is not None:
+            log_file.write(f"Checkpoint loaded from epoch {checkpoint['epoch']}\n")
+        if checkpoint.get('args') is not None:
+            log_file.write(f"Training configuration:\n{checkpoint['args']}\n\n")
 
+    log_file.write(f"------------------------------------------------------------------------------------\n Evaluation results:\n\n")
+    log_file.flush()
+                
+def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file, num_samples):
+    log_file.write(f"Masking type: {masking_type}\t Masking ratio: {masking_ratio}: \t")
+    with torch.no_grad():
+        total_loss = 0
+        for idx, (samples, _) in enumerate(dataloader):
+            samples = samples.to(args.device)
+            loss, _, _  = model(samples, masking_type=masking_type, masking_ratio=masking_ratio)
+            total_loss += loss.item()
+            if idx >= num_samples:
+                break
+        log_file.write(f"Loss: {total_loss/len(dataloader)}\n")
+        log_file.flush()
+
+
+            
 def main(args):
-	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    config = yaml.load(open(args.config_path, 'r'), Loader=yaml.FullLoader)
 
-	# Load the model
-	model = MaskedAutoencoderViT().to(device)
-	load_checkpoint(model, args.checkpoint_path, device)
+    match config['model']['architecture']:
+        case 'mae_vit_base_patch16':
+            model = mae_vit_base_patch16()
+        case 'mae_vit_large_patch16':
+            model = mae_vit_large_patch16()
+        case 'mae_vit_huge_patch14':
+            model = mae_vit_huge_patch14()
+        case _:
+            raise ValueError(f"Model {config['model']['architecture']} not recognized")
+        
+    checkpoint = torch.load(config['model']['checkpoint'], map_location='cpu')
+    model.load_state_dict(checkpoint['model'])
+    model = model.to(args.device)
+    model.eval()
 
-	# Data loading
-	transform = transforms.Compose([
-		transforms.Resize(256),
-		transforms.CenterCrop(224),
-		transforms.ToTensor(),
-	])
-	dataset = datasets.ImageFolder(args.data_path, transform=transform)
-	data_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
+    transform_eval = transforms.Compose([
+        transforms.RandomResizedCrop(224, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    
+    dataset_eval = datasets.ImageFolder(config['data']['path'], transform=transform_eval)
+    dataloader_eval = torch.utils.data.DataLoader(
+        dataset_eval,
+        batch_size=config['data']['batch_size'],
+        num_workers=config['data']['num_workers'],
+        shuffle=config['data']['shuffle'],
+        pin_memory=config['data']['pin_memory'],
+        drop_last=config['data']['drop_last']
+    )
 
-	# Evaluate
-	avg_loss = evaluate(model, data_loader, device, args.masking_type, masking_ratio=args.masking_ratio)
-	print(f"Average Loss: {avg_loss}")
+    # create output directory
+    output_path = config['output']['path']
+    os.makedirs(output_path, exist_ok=True)
+    evaluation_filename = f"evaluation_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+    with open(os.path.join(output_path, evaluation_filename), 'w') as log_file:
+        log_evaluation_header(config, log_file, checkpoint)
+        for masking_type in config['evaluation']['masking_types']:
+            for masking_ratio in config['evaluation']['masking_ratios']:
+                evaluate_on_setting(model, dataloader_eval, masking_type, masking_ratio, log_file, config['evaluation']['num_samples'])
+        
+    
+
+
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Evaluate a Masked Autoencoder model.")
-	parser.add_argument("--checkpoint_path", type=str, required=True, help="Path to the model checkpoint.")
-	parser.add_argument("--data_path", type=str, required=True, help="Path to the dataset directory.")
-	parser.add_argument("--batch_size", type=int, default=16, help="Batch size for evaluation.")
-	parser.add_argument("--masking_type", type=str, default="random", help="Type of masking to use.")
-	parser.add_argument("--masking_ratio", type=float, default=0.75, help="Ratio of tokens to mask.")
-
-	args = parser.parse_args()
-	main(args)
+    parser = argparse.ArgumentParser(description='Evaluate MAE model on ImageNet')
+    parser.add_argument('--config_path', default=r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\configs\config_eval.yaml', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
+    args = parser.parse_args()
+    
+    main(args)

@@ -21,12 +21,5 @@ def print_keys(d, parent_key=''):
         else:
             print(d, end='\t\t')
 
-# Check if 'model' key exists and is a dictionary
-if 'model_' in state_dict:
-    if isinstance(state_dict['model'], dict):
-        print_keys(state_dict['model'])
-    else:
-        print('The value under "model" key is not a dictionary.')
-else:
-    if isinstance(state_dict, dict):
-        print_keys(state_dict)
+
+print(state_dict['args'])
