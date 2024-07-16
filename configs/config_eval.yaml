@@ -8,7 +8,7 @@ data:
 
 model:
   architecture: mae_vit_base_patch16
-  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/20240711040440/outputs/checkpoint-50.pth
+  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/checkpoint-399.pth
 
 output:
   path: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/eval

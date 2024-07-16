@@ -48,7 +48,7 @@ def main(args):
         case _:
             raise ValueError(f"Model {config['model']['architecture']} not recognized")
         
-    checkpoint = torch.load(config['model']['checkpoint'], map_location='cpu')
+    checkpoint = torch.load(config['model']['checkpoint'], map_location=args.device)
     model.load_state_dict(checkpoint['model'])
     model = model.to(args.device)
     model.eval()
@@ -79,6 +79,7 @@ def main(args):
             for masking_ratio in config['evaluation']['masking_ratios']:
                 evaluate_on_setting(model, dataloader_eval, masking_type, masking_ratio, log_file, config['evaluation']['num_samples'])
         
+        log_file.write(f"\n\nEvaluation finished\n")
     
 
 
