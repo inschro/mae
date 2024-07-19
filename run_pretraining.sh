@@ -4,31 +4,31 @@
 timestamp=$(date +"%Y%m%d%H%M%S")
 
 # Create new directory with timestamp under ./jobs
-newDir="./jobs/$timestamp"
+newDir="./jobs/20240713152426"
 mkdir -p "$newDir"
 
 # Define masking type and arguments
-masking_type="entropy_masking"
+masking_type="entropy_kde_masking_hotfix"
 masking_args=$(echo '{"masking_ratio": 0.7}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
-dataPath="./data/imagnet-mini/val"
+dataPath="./data/imagnet-mini/train"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
-batchSize=30
-epochs=100
-accumIter=4
+batchSize=16
+epochs=400
+accumIter=256
 model="mae_vit_base_patch16"
 inputSize=224
 lr=1e-4
 weightDecay=0.05
 blr=1e-3
 minLr=3e-5
-warmupEpochs=1
+warmupEpochs=3
 device="cuda"
 seed=0
-resume=""
-startEpoch=0
+resume="/home/darius/Dokumente/Research/mae/jobs/20240713152426/outputs/checkpoint-355.pth"
+startEpoch=355
 numWorkers=10
 pinMem=true
 worldSize=1
