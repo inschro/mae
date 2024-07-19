@@ -17,3 +17,4 @@ job/
 output_dir/
 log_dir/
 eval/
+debug_info_mail.py
