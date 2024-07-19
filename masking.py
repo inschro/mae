@@ -61,7 +61,7 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute entropy
-        entropies = self.entropy(x, num_bins=10)
+        entropies = self.entropy(img_pat, num_bins=10)
         
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
@@ -87,36 +87,6 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute entropy
-        entropies = self.entropy_kde(x)
-        
-        # sort by entropy
-        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
-
-        # keep the first subset
-        ids_keep = ids_shuffle[:, :len_keep]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-        # generate the binary mask: 0 is keep, 1 is remove
-        mask = torch.ones([N, L], device=x.device)
-        mask[:, :len_keep] = 0
-        mask = torch.gather(mask, dim=1, index=ids_restore)
-
-        return x_masked, mask, ids_restore
-    
-    def entropy_kde_masking_hotfix(self, x, img_pat, masking_ratio=0.75, **kwargs): #TODO THIS is a temporary workaround
-        """
-        Perform per-sample entropy-based masking by sorting by entropy.
-        x: [N, L, D], sequence
-        """
-
-        # This workaround uses the original patchified image "img_pat" to calculate entropy w.o. the embedding layer! This means the patch procedure has to be called twice, which is not ideal
-        # Hence 
-
-        N, L, D = x.shape
-        len_keep = int(L * (1 - masking_ratio))
-
-        # compute entropy
         entropies = self.entropy_kde(img_pat)
         
         # sort by entropy
@@ -134,7 +104,8 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_masking_bins(self, x, ratios=[0.99, 0.0, 0.005, 0.99], **kwargs):
+    
+    def entropy_masking_bins(self, x, img_pat, ratios=[0.99, 0.0, 0.005, 0.99], **kwargs):
         """
         Perform per-sample entropy-based masking by sorting by entropy.
         x: [N, L, D], sequence
@@ -147,7 +118,7 @@ class MaskingModule(nn.Module):
         len_keep = (L * (1 - ratios_tensor) / ratios_tensor.shape[0]).int()
         
         # compute entropy
-        entropies = self.entropy_kde(x)
+        entropies = self.entropy_kde(img_pat)
         #entropies_min = entropies.min()
         #entropies_max = entropies.max()
         # Apply min-max normalization
@@ -176,7 +147,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_masking_threshold(self, x, threshold=0.5, **kwargs):
+    def entropy_masking_threshold(self, x,img_pat, threshold=0.5, **kwargs):
         """
         Perform per-sample entropy-based masking by thresholding entropy.
         x: [N, L, D], sequence
@@ -185,7 +156,7 @@ class MaskingModule(nn.Module):
         N, L, D = x.shape
 
         # compute entropy
-        entropies = self.entropy(x, num_bins=10)
+        entropies = self.entropy(img_pat, num_bins=10)
 
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
@@ -267,7 +238,6 @@ class MaskingModule(nn.Module):
         entropy = - torch.sum(pdf * torch.log(pdf), dim = -1)
         return entropy
     
-
     
     def __marginal_pdf_kde(self, values: torch.Tensor, bins: torch.Tensor, sigma: torch.Tensor):
         """
