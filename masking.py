@@ -78,7 +78,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def frequency_masking(self, x, masking_ratio=0.75, **kwargs):
+    def frequency_masking(self, x,img_pat, masking_ratio=0.75, **kwargs):
         """
         Perform per-sample frequency-based masking by sorting by frequency.
         x: [N, L, D], sequence
@@ -87,7 +87,7 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute mean frequency
-        mean_frequencies = self.mean_frequency(x)
+        mean_frequencies = self.mean_frequency(img_pat)
         
         # sort by entropy
         ids_shuffle = torch.argsort(mean_frequencies, dim=1, descending=True) # descend: large is keep, small is remove
