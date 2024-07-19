@@ -8,15 +8,15 @@ class MaskingModule(nn.Module):
         self.epsilon = epsilon
         
 
-    def forward(self, x, masking_type, **masking_args):
+    def forward(self, x, img_pat, masking_type, **masking_args):
         # Use getattr to dynamically select the method based on mask_type
         if hasattr(self, masking_type):
             method = getattr(self, masking_type)
-            return method(x, **masking_args)
+            return method(x,img_pat, **masking_args)
         else:
             raise ValueError(f"Unsupported mask type: {masking_type}")
         
-    def random_masking(self, x, masking_ratio=0.75, **kwargs):
+    def random_masking(self, x, img_pat, masking_ratio=0.75, **kwargs): #TODO THIS is a temporary workaround as img_pat is only accessed in entropy based masking
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -43,7 +43,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def random_masking_variable(self, x, masking_ratio_min=0.5, masking_ratio_max=0.75, **kwargs):
+    def random_masking_variable(self, x, img_pat, masking_ratio_min=0.5, masking_ratio_max=0.75, **kwargs):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -52,7 +52,7 @@ class MaskingModule(nn.Module):
         masking_ratio = torch.rand(1).item() * (masking_ratio_max - masking_ratio_min) + masking_ratio_min
         return self.random_masking(x, masking_ratio=masking_ratio, **kwargs)
     
-    def entropy_masking(self, x, masking_ratio=0.75, **kwargs):
+    def entropy_masking(self, x, img_pat, masking_ratio=0.75, **kwargs): #TODO THIS is a temporary workaround as img_pat is only accessed in entropy based masking
         """
         Perform per-sample entropy-based masking by sorting by entropy.
         x: [N, L, D], sequence
@@ -61,7 +61,7 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute entropy
-        entropies = self.entropy(x, num_bins=10)
+        entropies = self.entropy(img_pat, num_bins=10)
         
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
@@ -104,7 +104,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_kde_masking(self, x, masking_ratio=0.75, **kwargs):
+    def entropy_kde_masking(self, x, img_pat, masking_ratio=0.75, **kwargs): #TODO THIS is a temporary workaround as img_pat is only accessed in entropy based masking
         """
         Perform per-sample entropy-based masking by sorting by entropy.
         x: [N, L, D], sequence
@@ -113,7 +113,7 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute entropy
-        entropies = self.entropy_kde(x)
+        entropies = self.entropy_kde(img_pat)
         
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
@@ -131,8 +131,49 @@ class MaskingModule(nn.Module):
         return x_masked, mask, ids_restore
     
     
+    def entropy_masking_bins(self, x, img_pat, ratios=[0.99, 0.0, 0.005, 0.99], **kwargs):
+        """
+        Perform per-sample entropy-based masking by sorting by entropy.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape
+        # Convert ratios to a tensor
+        ratios_tensor = torch.tensor(ratios)
+        
+        # Compute lengths to keep for each ratio
+        len_keep = (L * (1 - ratios_tensor) / ratios_tensor.shape[0]).int()
+        
+        # compute entropy
+        entropies = self.entropy_kde(img_pat)
+        #entropies_min = entropies.min()
+        #entropies_max = entropies.max()
+        # Apply min-max normalization
+        #entropies = (entropies - entropies_min) / (entropies_max - entropies_min)
+        
+        # sort by entropy
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        ids_keep = torch.zeros((x.shape[0],torch.sum(len_keep))).long()
+        ids_restore = torch.zeros_like(ids_keep).long()
+        # keep the first subset
+        len_last = 0
+        current_idx = 0
+
+        for i,len in enumerate(len_keep):
+            ids_keep[:,current_idx:(current_idx+len)] = ids_shuffle[:, (i*L//3):(i*L//3+len)].int()
+            ids_restore[:,current_idx:(current_idx+len)] = torch.argsort(ids_keep[:,current_idx:(current_idx+len)], dim=1)
+            current_idx += len
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :torch.sum(len_keep)] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
     
-    def entropy_masking_threshold(self, x, threshold=0.5, **kwargs):
+    def entropy_masking_threshold(self, x,img_pat, threshold=0.5, **kwargs):
         """
         Perform per-sample entropy-based masking by thresholding entropy.
         x: [N, L, D], sequence
@@ -141,7 +182,7 @@ class MaskingModule(nn.Module):
         N, L, D = x.shape
 
         # compute entropy
-        entropies = self.entropy(x, num_bins=10)
+        entropies = self.entropy(img_pat, num_bins=10)
 
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
@@ -223,7 +264,6 @@ class MaskingModule(nn.Module):
         entropy = - torch.sum(pdf * torch.log(pdf), dim = -1)
         return entropy
     
-
     
     def __marginal_pdf_kde(self, values: torch.Tensor, bins: torch.Tensor, sigma: torch.Tensor):
         """

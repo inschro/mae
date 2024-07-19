@@ -82,8 +82,8 @@ def run_one_image(img, model, masking_type, **masking_args):
 #img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
 # img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 # img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
-# img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
-img_url = 'https://cv.cs.columbia.edu/sachit/classviadescr/static/datasets/ImageNet-ILSVRC2012/val/n01443537/ILSVRC2012_val_00018075.JPEG'
+#img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
+img_url = 'https://cataas.com/cat'
 
 img = Image.open(requests.get(img_url, stream=True).raw)
 img = img.resize((224, 224))
@@ -99,7 +99,9 @@ plt.rcParams['figure.figsize'] = [5, 5]
 show_image(torch.tensor(img))
 
 masking_args = {
-    'masking_ratio': 0.6,
+    'masking_ratio': 0.2,
+    'threshold': 0.4,
+    'ratios' : [0.99, 0.0, 0.005, 0.99]
 }
 
 chkpt_dir = './mae_visualize_vit_large.pth'
@@ -110,6 +112,11 @@ run_one_image(img, model_mae, masking_type='frequency_masking', **masking_args)
 # chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
 # model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
 # run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
-# #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
-# #run_one_image(img, model_mae, masking_type='entropy_masking_threshold', **masking_args)
-# run_one_image(img, model_mae, masking_type='entropy_kde_masking', **masking_args)
+# run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
+
+chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240713152426/outputs/checkpoint-399.pth'
+model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
+#run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
+#run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
+#run_one_image(img, model_mae, masking_type='entropy_masking_threshold', **masking_args)
+run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
