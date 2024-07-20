@@ -173,7 +173,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def entropy_masking_threshold(self, x,img_pat, threshold=0.5, **kwargs):
+    def entropy_masking_threshold(self, x, img_pat, threshold=0.5, **kwargs):
         """
         Perform per-sample entropy-based masking by thresholding entropy.
         x: [N, L, D], sequence

@@ -15,12 +15,14 @@ def log_evaluation_header(eval_config, log_file, checkpoint=None):
         if checkpoint.get('epoch') is not None:
             log_file.write(f"Checkpoint loaded from epoch {checkpoint['epoch']}\n")
         if checkpoint.get('args') is not None:
-            log_file.write(f"Training configuration:\n{checkpoint['args']}\n\n")
+            args_as_dict = vars(checkpoint['args'])
+            args_json = json.dumps(args_as_dict, indent=2)
+            log_file.write(f"Training configuration:\n{args_json}\n\n")
 
     log_file.write(f"------------------------------------------------------------------------------------\n Evaluation results:\n\n")
     log_file.flush()
                 
-def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file, num_samples):
+def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file, num_samples, batch_size):
     log_file.write(f"Masking type: {masking_type}\t Masking ratio: {masking_ratio}: \t")
     with torch.no_grad():
         total_loss = 0
@@ -28,9 +30,11 @@ def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file
             samples = samples.to(args.device)
             loss, _, _  = model(samples, masking_type=masking_type, masking_ratio=masking_ratio)
             total_loss += loss.item()
-            if idx >= num_samples:
+            if idx + 1 >= num_samples:
+                log_file.write(f"Loss: {total_loss/(num_samples)}\n")
                 break
-        log_file.write(f"Loss: {total_loss/len(dataloader)}\n")
+        else:
+            log_file.write(f"Loss: {total_loss/len(dataloader)}\n")
         log_file.flush()
 
 
@@ -77,7 +81,16 @@ def main(args):
         log_evaluation_header(config, log_file, checkpoint)
         for masking_type in config['evaluation']['masking_types']:
             for masking_ratio in config['evaluation']['masking_ratios']:
-                evaluate_on_setting(model, dataloader_eval, masking_type, masking_ratio, log_file, config['evaluation']['num_samples'])
+                evaluate_on_setting(
+                    model,
+                    dataloader_eval,
+                    masking_type,
+                    masking_ratio,
+                    log_file,
+                    config['evaluation']['num_samples'],
+                    config['data']['batch_size']
+                )
+
         
         log_file.write(f"\n\nEvaluation finished\n")
     
