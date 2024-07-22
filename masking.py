@@ -137,38 +137,56 @@ class MaskingModule(nn.Module):
         x: [N, L, D], sequence
         """
         N, L, D = x.shape
-        # Convert ratios to a tensor
-        ratios_tensor = torch.tensor(ratios)
+        num_intervals = len(ratios)
         
-        # Compute lengths to keep for each ratio
-        len_keep = (L * (1 - ratios_tensor) / ratios_tensor.shape[0]).int()
+        # Compute entropy
+        entropies = self.entropy(img_pat)
         
-        # compute entropy
-        entropies = self.entropy_kde(img_pat)
+        # Sort by increasing entropy
+        ids_sorted = torch.argsort(entropies, dim=1, descending=False)
         
+        # Determine the number of patches per interval
+        patches_per_interval = L // num_intervals
         
-        # sort by entropy
-        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        # If there are remaining patches, add them to the last interval
+        remaining_patches = L % num_intervals
+        
+        # Initialize mask
+        mask = torch.ones((N, L), device=x.device)
+        
+        # Mask each interval
+        start_idx = 0
+        for i, ratio in enumerate(ratios):
+            end_idx = start_idx + patches_per_interval
+            if i == num_intervals - 1:
+                end_idx += remaining_patches
+            
+            # Determine the number of patches to keep in this interval
+            len_keep = int((end_idx - start_idx) * (1 - ratio))
+            
+            # Get the ids for this interval
+            interval_ids = ids_sorted[:, start_idx:end_idx]
+            
+            # Shuffle the interval ids for uniform random masking
+            interval_ids_shuffle = interval_ids[:, torch.randperm(interval_ids.size(1))]
+            
+            # Keep the first subset of shuffled ids
+            ids_keep = interval_ids_shuffle[:, :len_keep]
+            
+            # Mark the kept ids as 0 in the mask (0 is keep, 1 is remove)
+            mask.scatter_(1, ids_keep, 0)
+            
+            start_idx = end_idx
 
-        ids_keep = torch.zeros((x.shape[0],torch.sum(len_keep))).long()
-        #ids_restore = torch.zeros_like(ids_keep).long()
-        # keep the first subset
-        len_last = 0
-        current_idx = 0
-
-        for i,len in enumerate(len_keep):
-            ids_keep[:,current_idx:(current_idx+len)] = ids_shuffle[:, (i*L//3):(i*L//3+len)].int()
-            #ids_restore[:,current_idx:(current_idx+len)] = torch.argsort(ids_shuffle[:, (i*L//3):(i*L//3+len)].int(), dim=1)
-            current_idx += len
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-        # generate the binary mask: 0 is keep, 1 is remove
-        mask = torch.ones([N, L], device=x.device)
-        mask[:, :torch.sum(len_keep)] = 0
-        mask = torch.gather(mask, dim=1, index=ids_restore)
-
+        # Create the masked x based on the mask
+        x_masked = x * mask.unsqueeze(-1)
+        
+        # Restore ids for unshuffling (reverse the initial sorting)
+        ids_restore = torch.argsort(ids_sorted, dim=1)
+        
         return x_masked, mask, ids_restore
+
+
     
     def random_entropy_masking_bins(self, x, img_pat, ratios=[0.99, 0.0, 0.005, 0.99], **kwargs):
         """
