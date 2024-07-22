@@ -145,24 +145,64 @@ class MaskingModule(nn.Module):
         
         # compute entropy
         entropies = self.entropy_kde(img_pat)
-        #entropies_min = entropies.min()
-        #entropies_max = entropies.max()
-        # Apply min-max normalization
-        #entropies = (entropies - entropies_min) / (entropies_max - entropies_min)
+        
         
         # sort by entropy
         ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         ids_keep = torch.zeros((x.shape[0],torch.sum(len_keep))).long()
-        ids_restore = torch.zeros_like(ids_keep).long()
+        #ids_restore = torch.zeros_like(ids_keep).long()
         # keep the first subset
         len_last = 0
         current_idx = 0
 
         for i,len in enumerate(len_keep):
             ids_keep[:,current_idx:(current_idx+len)] = ids_shuffle[:, (i*L//3):(i*L//3+len)].int()
-            ids_restore[:,current_idx:(current_idx+len)] = torch.argsort(ids_keep[:,current_idx:(current_idx+len)], dim=1)
+            #ids_restore[:,current_idx:(current_idx+len)] = torch.argsort(ids_shuffle[:, (i*L//3):(i*L//3+len)].int(), dim=1)
+            current_idx += len
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :torch.sum(len_keep)] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+    
+    def random_entropy_masking_bins(self, x, img_pat, ratios=[0.99, 0.0, 0.005, 0.99], **kwargs):
+        """
+        Perform per-sample entropy-based masking by sorting by entropy.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape
+        # Convert ratios to a tensor
+        ratios_tensor = torch.tensor(ratios)
+        
+        # Compute lengths to keep for each ratio
+        len_keep = (L * (1 - ratios_tensor) / ratios_tensor.shape[0]).int()
+        
+        # compute entropy
+        entropies = self.entropy_kde(img_pat)
+        entropies_min = entropies.min()
+        entropies_max = entropies.max()
+        # Apply min-max normalization
+        entropies = (entropies - entropies_min) / (entropies_max - entropies_min)
+        entropies = entropies + torch.rand_like(entropies)
+        
+        # sort by entropy
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        ids_keep = torch.zeros((x.shape[0],torch.sum(len_keep))).long()
+        #ids_restore = torch.zeros_like(ids_keep).long()
+        # keep the first subset
+        len_last = 0
+        current_idx = 0
+
+        for i,len in enumerate(len_keep):
+            ids_keep[:,current_idx:(current_idx+len)] = ids_shuffle[:, (i*L//3):(i*L//3+len)].int()
+            #ids_restore[:,current_idx:(current_idx+len)] = torch.argsort(ids_shuffle[:, (i*L//3):(i*L//3+len)].int(), dim=1)
             current_idx += len
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
@@ -322,7 +362,7 @@ class MaskingModule(nn.Module):
         gray = red + green + blue
 
         # Use fft along the specified dimension
-        frequencies = torch.fft.fft(gray, dim=2)
+        frequencies = torch.fft(gray, signal_ndim=2)
         frequencies = torch.abs(frequencies)
 
         # Calculate the mean frequency
