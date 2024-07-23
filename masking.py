@@ -134,58 +134,37 @@ class MaskingModule(nn.Module):
     def entropy_masking_bins(self, x, img_pat, ratios=[0.99, 0.0, 0.005, 0.99], random = True, **kwargs):
         """
         Perform per-sample entropy-based masking by sorting by entropy.
+        ratios: list of float, ratios of patches to remove, from lowest to highest entropy
         x: [N, L, D], sequence
         """
         N, L, D = x.shape
         num_intervals = len(ratios)
         
         # Compute entropy
-        entropies = self.entropy_kde(img_pat)
+        entropies = self.entropy_kde(img_pat) # [N, L]
         
         # Sort by increasing entropy
-        ids_sorted = torch.argsort(entropies, dim=1, descending=False)
-        
-        # Determine the number of patches per interval
-        patches_per_interval = L // num_intervals
-        
-        # If there are remaining patches, add them to the last interval
-        remaining_patches = L % num_intervals
-        
-        # Initialize mask
-        mask = torch.ones((N, L), device=x.device)
-        
-        # Mask each interval
-        start_idx = 0
+        ids_sorted = torch.argsort(entropies, dim=1, descending=True)
+        ids_restore = torch.argsort(ids_sorted, dim=1)
+
+        bin_size = L // num_intervals
+
+        # create bins of shape [N, bin_size, num_intervals]
+        bins = torch.ones([N, num_intervals, bin_size], device=x.device)
         for i, ratio in enumerate(ratios):
-            end_idx = start_idx + patches_per_interval
-            if i == num_intervals - 1:
-                end_idx += remaining_patches
-            
-            # Determine the number of patches to keep in this interval
-            len_keep = int((end_idx - start_idx) * (1 - ratio))
-            
-            # Get the ids for this interval
-            interval_ids = ids_sorted[:, start_idx:end_idx]
-            
-            if random:
-                # Shuffle the interval ids for uniform random masking
-                interval_ids_shuffle = interval_ids[:, torch.randperm(interval_ids.size(1))]
-                
-                # Keep the first subset of shuffled ids
-                ids_keep = interval_ids_shuffle[:, :len_keep]
-            else:
-                ids_keep = interval_ids[:, :len_keep]
-            
-            # Mark the kept ids as 0 in the mask (0 is keep, 1 is remove)
-            mask.scatter_(1, ids_keep, 0)
-            
-            start_idx = end_idx
+            len_keep = int(bin_size * (1 - ratio))
+            bins[:, i, :len_keep] = 0
+
+        # flatten bins to mask
+        mask = bins.reshape([N, L])
+        ids_keep = ids_sorted[mask==0]
+        
+        # Unshuffle the mask to get the original order
+        mask = torch.gather(mask, dim=1, index=ids_restore)
 
         # Create the masked x based on the mask
-        x_masked = x * mask.unsqueeze(-1)
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
         
-        # Restore ids for unshuffling (reverse the initial sorting)
-        ids_restore = torch.argsort(ids_sorted, dim=1)
         
         return x_masked, mask, ids_restore
     
@@ -347,9 +326,43 @@ class MaskingModule(nn.Module):
         return mean_frequency
     
 if __name__ == '__main__':
-    # Test the mean frequency
-    x = torch.randn(2, 3, 4)
+    import requests
+    from PIL import Image
+    import numpy as np
+    import models_mae
+    import matplotlib.pyplot as plt
+
+    imagenet_mean = np.array([0.485, 0.456, 0.406])
+    imagenet_std = np.array([0.229, 0.224, 0.225])
+
+    img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
+
+    img = Image.open(requests.get(img_url, stream=True).raw)
+    img = img.resize((224, 224))
+    img = np.array(img) / 255.
+
     masking = MaskingModule()
-    mean_frequency = masking.mean_frequency(x, dim=-1)
-    print(mean_frequency.shape)
-    print(mean_frequency)
+
+    print(img.shape)
+
+    autoencoder = models_mae.mae_vit_base_patch16()
+
+    x = autoencoder.patchify(torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2))
+
+    print(x.shape)
+
+    masked_x, mask, ids_restore = masking.entropy_masking_bins(x, x, ratios=[1, 1, 0, 1], random=False)
+
+    print(masked_x.shape, mask.shape, ids_restore.shape)
+    print(mask[0, :20])
+    print(ids_restore[0, :20])
+
+    masked_x = autoencoder.unpatchify(masked_x)
+
+    print(masked_x.shape)
+
+    plt.imshow(masked_x[0].permute(1, 2, 0).detach().cpu().numpy())
+    plt.title('Masked Image')
+
+
+    plt.show()
