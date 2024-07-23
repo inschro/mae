@@ -138,25 +138,41 @@ class MaskingModule(nn.Module):
         x: [N, L, D], sequence
         """
         N, L, D = x.shape
-        num_intervals = len(ratios)
+        num_bins = len(ratios)
         
         # Compute entropy
         entropies = self.entropy_kde(img_pat) # [N, L]
+
+        # pad the entropies to make sure the length is divisible by num_intervals
+        pad_len = num_bins - (L % num_bins)
         
         # Sort by increasing entropy
         ids_sorted = torch.argsort(entropies, dim=1, descending=True)
         ids_restore = torch.argsort(ids_sorted, dim=1)
 
-        bin_size = L // num_intervals
 
-        # create bins of shape [N, bin_size, num_intervals]
-        bins = torch.ones([N, num_intervals, bin_size], device=x.device)
-        for i, ratio in enumerate(ratios):
+        bin_size = L // num_bins + 1
+
+        # create bins of shape [N, num_bins, bin_size]
+        bins = torch.ones([N, num_bins, bin_size], device=x.device)
+        for bin_idx, ratio in enumerate(ratios):
             len_keep = int(bin_size * (1 - ratio))
-            bins[:, i, :len_keep] = 0
+            if bin_idx == len(ratios) - 1 and pad_len > 0:
+                len_keep = min(len_keep, bin_size - pad_len)
+                bins[:, bin_idx, :len_keep] = 0
+                if random:
+                    perm = torch.randperm(bin_size - pad_len).repeat(N, 1)
+                    perm = torch.cat([perm, torch.arange(bin_size - pad_len, bin_size).unsqueeze(0).repeat(N, 1)], dim=1)
+                    bins[:, bin_idx] = torch.gather(bins[:, bin_idx], dim=1, index=perm)
+                break
+            bins[:, bin_idx, :len_keep] = 0
+            # if random, shuffle the bins
+            if random:
+                bins[:, bin_idx] = bins[:, bin_idx, torch.randperm(bin_size)]
+
 
         # flatten bins to mask
-        mask = bins.reshape([N, L])
+        mask = bins.reshape([N, L+pad_len])[:, :L]
         ids_keep = ids_sorted[mask==0]
         
         # Unshuffle the mask to get the original order
