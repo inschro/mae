@@ -7,7 +7,6 @@ from timm import create_model
 import numpy as np
 import os
 from sklearn.covariance import LedoitWolf
-import cv2
 import matplotlib.pyplot as plt
 import models_mae
 from PIL import Image
@@ -92,32 +91,35 @@ class PaDiM:
             for batch, _ in dataloader:
                 batch = batch.to(self.device)
                 feature,__,___ = self.feature_extractor(batch)
+                feature = feature[:,:-1,:] #ignore the cls token
                 features.append(feature.cpu().numpy())
         features = np.concatenate(features, axis=0)
-        features = features.reshape([batch.shape[0],-1])
-        N, C = features.shape
-        features = features.reshape(N, C, -1).transpose(0, 2, 1).reshape(-1, C)
+        N, L, C = features.shape
+        features = features.reshape(-1, C)  # (N_batches * batch_size * L, C)
         self.mean = np.mean(features, axis=0)
         self.cov = LedoitWolf().fit(features).covariance_
 
     def anomaly_score(self, feature):
-        feature = feature.reshape(-1, feature.shape[1])
+        L, C = feature.shape
         inv_cov = np.linalg.inv(self.cov)
         diff = feature - self.mean
         scores = np.sum(np.dot(diff, inv_cov) * diff, axis=1)
-        return scores.reshape(IMAGE_SIZE // 16, IMAGE_SIZE // 16)
-
+        return scores.reshape(int(np.sqrt(L)), int(np.sqrt(L)))
+    
     def predict(self, dataloader):
         self.feature_extractor.eval()
         anomaly_maps = []
+        original_images = []
         with torch.no_grad():
             for batch, _ in dataloader:
                 batch = batch.to(self.device)
-                feature = self.feature_extractor(batch)
+                feature,__,___ = self.feature_extractor(batch)
+                feature = feature[:,:-1,:] #ignore the cls token
                 for i in range(feature.size(0)):
                     score = self.anomaly_score(feature[i].cpu().numpy())
                     anomaly_maps.append(score)
-        return anomaly_maps
+                    original_images.append(batch[i].cpu().numpy().transpose(1, 2, 0))  # Save original image
+        return anomaly_maps, original_images
 
 # Transformations
 transform = T.Compose([
@@ -141,9 +143,30 @@ padim.fit(train_loader)
 # Predict Anomalies
 anomaly_maps = padim.predict(test_loader)
 
-# Visualize Anomaly Maps
-for i, anomaly_map in enumerate(anomaly_maps):
-    plt.subplot(1, len(anomaly_maps), i+1)
-    plt.imshow(anomaly_map, cmap='hot')
-    plt.title(f'Anomaly {i+1}')
+
+anomaly_maps, original_images = padim.predict(test_loader)
+print("anomaly maps calculation done")
+
+# Visualize Anomaly Maps with Original Images using matplotlib
+num_maps = min(10, len(anomaly_maps))  # Display at most 10 anomaly maps
+fig, axes = plt.subplots(2, num_maps, figsize=(20, 10))
+
+import cv2
+
+for i in range(num_maps):
+    original_image = original_images[i]
+    anomaly_map = anomaly_maps[i]
+
+    # Plot original image
+    axes[0, i].imshow((original_image * [0.229, 0.224, 0.225]) + [0.485, 0.456, 0.406])
+    axes[0, i].set_title(f'Original {i+1}')
+    axes[0, i].axis('off')
+
+    # Plot anomaly map overlayed on the original image
+    axes[1, i].imshow((original_image * [0.229, 0.224, 0.225]) + [0.485, 0.456, 0.406])
+    axes[1, i].imshow(cv2.resize(anomaly_map,(IMAGE_SIZE,IMAGE_SIZE)), cmap='hot', alpha=0.5)  # Overlay anomaly map
+    axes[1, i].set_title(f'Anomaly {i+1}')
+    axes[1, i].axis('off')
+
 plt.show()
+
