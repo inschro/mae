@@ -9,6 +9,7 @@ New-Item -ItemType Directory -Force -Path $newDir
 $masking_type = "entropy_masking_bins"
 $masking_args = @{
     ratios = @(0.5, 0.6, 0.9, 1)
+    # masking_ratio = 0.75
 } | ConvertTo-Json -Compress
 
 $masking_args = $masking_args -replace '"', '\"'
@@ -17,9 +18,9 @@ $masking_args = $masking_args -replace '"', '\"'
 $dataPath = "C:\Users\Ingo\Desktop\imagenet-mini\train"
 $outputDir = "$newDir\outputs"
 $logDir = "$newDir\logs"
-$batchSize = 32
+$batchSize = 64
 $epochs = 400
-$accumIter = 128
+$accumIter = 64
 $model = "mae_vit_base_patch16"
 $inputSize = 224
 $lr = 1e-4
@@ -31,7 +32,7 @@ $device = "cuda"
 $seed = 0
 $resume = ""
 $startEpoch = 0
-$numWorkers = 10
+$numWorkers = 0
 $pinMem = $true
 $worldSize = 1
 $localRank = -1

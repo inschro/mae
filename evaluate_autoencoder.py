@@ -24,9 +24,11 @@ def log_evaluation_header(eval_config, log_file, checkpoint=None):
                 
 def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file, num_samples, batch_size):
     log_file.write(f"Masking type: {masking_type}\t Masking ratio: {masking_ratio}: \t")
+    print(f"\n Masking type: {masking_type}\t Masking ratio: {masking_ratio}: \t")
     with torch.no_grad():
         total_loss = 0
         for idx, (samples, _) in enumerate(dataloader):
+            print(f"Batch {idx+1}/{num_samples}", end='\r')
             samples = samples.to(args.device)
             loss, _, _  = model(samples, masking_type=masking_type, masking_ratio=masking_ratio)
             total_loss += loss.item()
@@ -64,6 +66,7 @@ def main(args):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     
     dataset_eval = datasets.ImageFolder(config['data']['path'], transform=transform_eval)
+    dataset_eval = torch.utils.data.Subset(dataset_eval, range(config['evaluation']['num_samples'] * config['data']['batch_size']))
     dataloader_eval = torch.utils.data.DataLoader(
         dataset_eval,
         batch_size=config['data']['batch_size'],
