@@ -6,27 +6,27 @@ $newDir = ".\jobs\$timestamp"
 New-Item -ItemType Directory -Force -Path $newDir
 
 # Define masking type and arguments
-$masking_type = "entropy_masking"
+$masking_type = "entropy_masking_bins"
 $masking_args = @{
-    masking_ratio = 0.7
+    ratios = @(0.5, 0.6, 0.9, 1)
 } | ConvertTo-Json -Compress
 
 $masking_args = $masking_args -replace '"', '\"'
 
 # Define configuration variables
-$dataPath = "C:\Users\Ingo\Desktop\imagenet-mini\val"
+$dataPath = "C:\Users\Ingo\Desktop\imagenet-mini\train"
 $outputDir = "$newDir\outputs"
 $logDir = "$newDir\logs"
-$batchSize = 4
-$epochs = 100
-$accumIter = 4
+$batchSize = 32
+$epochs = 400
+$accumIter = 128
 $model = "mae_vit_base_patch16"
 $inputSize = 224
 $lr = 1e-4
 $weightDecay = 0.05
 $blr = 1e-3
 $minLr = 3e-5
-$warmupEpochs = 1
+$warmupEpochs = 20
 $device = "cuda"
 $seed = 0
 $resume = ""

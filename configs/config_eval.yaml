@@ -1,14 +1,14 @@
 data:
   path: C:/Users/Ingo/Desktop/imagenet-mini/val/
-  batch_size: 16
+  batch_size: 48
   num_workers: 10
   shuffle: False
   pin_memory: False
   drop_last: False
 
 model:
-  architecture: mae_vit_large_patch16
-  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/mae_visualize_vit_large.pth
+  architecture: mae_vit_base_patch16
+  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/20240820185326/outputs/checkpoint-399.pth
 
 output:
   path: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/eval
@@ -16,4 +16,4 @@ output:
 evaluation:
   masking_types: ['random_masking', 'entropy_masking']
   masking_ratios: [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-  num_samples: 20
+  num_samples: 10

@@ -1,3 +1,6 @@
+import sys
+sys.path.append(r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae')
+
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
@@ -15,9 +18,9 @@ from PIL import Image
 # Parameters
 BATCH_SIZE = 16
 IMAGE_SIZE = 224
-MODEL_NAME = 'mae_vit_base_patch16'
-DATASET_PATH = r'/home/darius/Dokumente/Research/mae/data/mvtec-ad'
-WEIGHTS_PATH = r'/home/darius/Dokumente/Research/mae/jobs/20240724105007/outputs/checkpoint-70.pth'
+MODEL_NAME = 'mae_vit_large_patch16'
+DATASET_PATH = r'C:\Users\Ingo\Desktop\mvtec_anomaly_detection'
+WEIGHTS_PATH = r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\mae_visualize_vit_large.pth'
 CATEGORY = 'bottle'
 
 MASKING_ARGS = {
@@ -88,7 +91,8 @@ class PaDiM:
         self.feature_extractor.eval()
         features = []
         with torch.no_grad():
-            for batch, _ in dataloader:
+            for i, (batch, _) in enumerate(dataloader):
+                print(f'Extracting features: {i * BATCH_SIZE}/{len(dataloader.dataset)}', end='\r')
                 batch = batch.to(self.device)
                 feature,__,___ = self.feature_extractor(batch)
                 feature = feature[:,:-1,:] #ignore the cls token
