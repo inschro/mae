@@ -1,14 +1,15 @@
 data:
   path: C:/Users/Ingo/Desktop/imagenet-mini/val/
   batch_size: 48
-  num_workers: 0
+  num_workers: 10
   shuffle: False
-  pin_memory: False
+  pin_memory: True
   drop_last: False
+  persistent_workers: True
 
 model:
   architecture: mae_vit_base_patch16
-  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/checkpoint-399.pth
+  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/20240821214220/outputs/checkpoint-160.pth
 
 output:
   path: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/eval

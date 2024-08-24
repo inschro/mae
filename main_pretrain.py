@@ -95,6 +95,9 @@ def get_args_parser():
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
     parser.set_defaults(pin_mem=True)
+    parser.add_argument('--persistent_workers', action='store_true',
+                        help='If using workers > 0, this reuses workers rather than creating new ones each epoch.')
+    parser.set_defaults(persistent_workers=False)
 
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
@@ -153,6 +156,7 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=True,
+        persistent_workers=args.persistent_workers,
     )
     
     # define the model
@@ -197,7 +201,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 10 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

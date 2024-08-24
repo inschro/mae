@@ -73,7 +73,8 @@ def main(args):
         num_workers=config['data']['num_workers'],
         shuffle=config['data']['shuffle'],
         pin_memory=config['data']['pin_memory'],
-        drop_last=config['data']['drop_last']
+        drop_last=config['data']['drop_last'],
+        persistent_workers=config['data']['persistent_workers']
     )
 
     # create output directory
