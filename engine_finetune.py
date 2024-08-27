@@ -32,6 +32,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 20
+    if args is not None:
+        if hasattr(args, 'print_freq'):
+            print_freq = args.print_freq
 
     accum_iter = args.accum_iter
 

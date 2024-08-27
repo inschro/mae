@@ -2,7 +2,7 @@
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 
 # Create new directory with timestamp under .\jobs
-$newDir = ".\jobs\$timestamp\_linprobe"
+$newDir = ".\jobs\$timestamp linprobe"
 New-Item -ItemType Directory -Force -Path $newDir
 
 # Define configuration variables

@@ -1,87 +1,132 @@
-# Define the arguments
-$batch_size = 4
-$epochs = 50
-$accum_iter = 1
-$model = 'vit_base_patch16'
-$input_size = 224
-$weight_decay = 0.05
-$lr = $null
+# Generate a timestamp
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+
+# Create new directory with timestamp under .\jobs
+$newDir = ".\jobs\$timestamp finetune"
+New-Item -ItemType Directory -Force -Path $newDir
+
+# Define configuration variables
+$batchSize = 64
+$epochs = 100
+$accumIter = 16
+
+# Model Parameters
+$model = "vit_base_patch16"
+$inputSize = 224
+$drop_path = 0.1
+
+# Optimizer Parameters
+$clip_grad = 0.2
+$weightDecay = 0.0
 $blr = 1e-3
+$lr = $null
 $layer_decay = 0.75
 $min_lr = 1e-6
-$warmup_epochs = 5
+$warmupEpochs = 5
 
+# Augmentation Parameters
+$color_jitter = $null
+$aa = "rand-m9-mstd0.5-inc1"
+$smoothing = 0.1
 
-$finetune = 'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\mae_pretrain_vit_base.pth'
-$global_pool = $true
-$data_path = 'C:\Users\Ingo\Desktop\imagenet-mini'
-$nb_classes = 1000
-$output_dir = 'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\downstream\classification\output_dir'
-$log_dir = 'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\downstream\classification\log_dir'
-$device = 'cuda'
+# Random erase parameters
+$reprob = 0.25
+$remode = "pixel"
+$recount = 1
+$resplit = $false
+
+# Mixup parameters
+$mixup = 0.8
+$cutmix = 1.0
+$mixup_prob = 1.0
+$mixup_switch_prob = 0.5
+$mixup_mode = "batch"
+
+# Finetuning parameters
+$finetune = "C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240821214220\outputs\checkpoint-799.pth"
+
+# Dataset parameters
+$dataPath = "C:\Users\Ingo\Desktop\imagenet-mini"
+$nbClasses = 1000
+$outputDir = "$newDir\outputs"
+$logDir = "$newDir\logs"
+$device = "cuda"
 $seed = 0
-$resume = 'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\mae_pretrain_vit_base.pth'
-$start_epoch = 0
+$resume = ""
+$startEpoch = 0
 $eval = $false
-$dist_eval = $false
-$num_workers = 10
-$pin_mem = $true
-$no_pin_mem = $false
-$world_size = 1
-$local_rank = -1
-$dist_on_itp = $false
-$dist_url = 'env://'
+$numWorkers = 10
+$pinMem = $true
+
+# other parameters
+$print_freq = 100
+
 
 # Construct the argument string
 $arguments = @(
-    "--batch_size $batch_size",
+    "--batch_size $batchSize",
     "--epochs $epochs",
-    "--accum_iter $accum_iter",
+    "--accum_iter $accumIter",
     "--model $model",
-    "--input_size $input_size",
-    "--weight_decay $weight_decay",
-    "--lr $lr",
+    "--input_size $inputSize",
+    "--drop_path $drop_path",
+    "--weight_decay $weightDecay",
     "--blr $blr",
     "--layer_decay $layer_decay",
     "--min_lr $min_lr",
-    "--warmup_epochs $warmup_epochs",
-    "--finetune $finetune",
-    "--global_pool $global_pool",
-    "--data_path $data_path",
-    "--nb_classes $nb_classes",
-    "--output_dir $output_dir",
-    "--log_dir $log_dir",
+    "--warmup_epochs $warmupEpochs",
+    "--aa $aa",
+    "--smoothing $smoothing",
+    "--reprob $reprob",
+    "--remode $remode",
+    "--recount $recount",
+    "--resplit",
+    "--mixup $mixup",
+    "--cutmix $cutmix",
+    "--mixup_prob $mixup_prob",
+    "--mixup_switch_prob $mixup_switch_prob",
+    "--mixup_mode $mixup_mode",
+    "--finetune `"$finetune`"",
+    "--cls_token",
+    "--data_path `"$dataPath`"",
+    "--nb_classes $nbClasses",
+    "--output_dir `"$outputDir`"",
+    "--log_dir `"$logDir`"",
     "--device $device",
     "--seed $seed",
-    "--resume $resume",
-    "--start_epoch $start_epoch",
-    "--eval $eval",
-    "--dist_eval $dist_eval",
-    "--num_workers $num_workers",
-    "--pin_mem $pin_mem",
-    "--no_pin_mem $no_pin_mem",
-    "--world_size $world_size",
-    "--local_rank $local_rank",
-    "--dist_on_itp $dist_on_itp",
-    "--dist_url $dist_url"
+    "--start_epoch $startEpoch",
+    "--num_workers $numWorkers",
+    "--print_freq $print_freq"
 )
 
-# Remove null or false arguments
-$arguments = $arguments | Where-Object { 
-    $_ -notmatch '--clip_grad $null' -and 
-    $_ -notmatch '--lr $null' -and 
-    $_ -notmatch '--color_jitter $null' -and 
-    $_ -notmatch '--cutmix_minmax $null' -and 
-    $_ -notmatch '--resplit $false' -and 
-    $_ -notmatch '--eval $false' -and 
-    $_ -notmatch '--dist_eval $false' -and 
-    $_ -notmatch '--no_pin_mem $false' -and 
-    $_ -notmatch '--dist_on_itp $false' -and 
-    $_ -notmatch '--global_pool $false'
+if ($pinMem) {
+    $arguments += "--pin_mem"
+} else {
+    $arguments += "--no_pin_mem"
+}
+if ($eval) {
+    $arguments += "--eval"
+}
+if ($resplit) {
+    $arguments += "--resplit"
+}
+if ($null -ne $clip_grad) {
+    $arguments += "--clip_grad $clip_grad"
+}
+if ($null -ne $lr) {
+    $arguments += "--lr $lr"
+}
+if ($null -ne $color_jitter) {
+    $arguments += "--color_jitter $color_jitter"
+}
+if ($resume -ne "") {
+    $arguments += "--resume `"$resume`""
 }
 
 # Join the arguments into a single string
 $argsString = $arguments -join ' '
 
-# Run the Python script with the arguments
-python main_finetune.py $argsString
+# Run the Python script with the arguments and print the command
+$trainingCommand = "python main_finetune.py $argsString"
+Write-Host $trainingCommand
+Invoke-Expression $trainingCommand
