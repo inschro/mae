@@ -1,45 +1,48 @@
 # Generate a timestamp
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 
+$info = "_Pretrain_IMNETMINI_random_epoch800_warmup40_modelmicro"
+
 # Create new directory with timestamp under .\jobs
 $newDir = ".\jobs\$timestamp"
-$newDir = ".\jobs\20240821214220"
+$newDir = $newDir + $info
 New-Item -ItemType Directory -Force -Path $newDir
 
 # Define masking type and arguments
-$masking_type = "entropy_masking_bins"
+$masking_type = "random_masking"
 $masking_args = @{
-    ratios = @(0.8, 0.8, 1, 1)
-    # masking_ratio = 0.95
+    # ratios = @(0.7, 0.75, 0.8, 0.95)
+    masking_ratio = 0.9
 } | ConvertTo-Json -Compress
 
 $masking_args = $masking_args -replace '"', '\"'
 
 # Define configuration variables
-$dataPath = "C:\Users\Ingo\Desktop\imagenet-mini\train"
+$dataPath = "I:\imagenet\train"  # "C:\Users\Ingo\Desktop\imagenet-mini\train"
 $outputDir = "$newDir\outputs"
 $logDir = "$newDir\logs"
-$batchSize = 32
-$epochs = 800
+$batchSize = 128
+$epochs = 10
 $accumIter = 32
-$model = "mae_vit_base_patch16"
+$checkpoint_freq = 1
+$model = "mae_vit_micro_patch14"
 $inputSize = 224
 $lr = $null
 $weightDecay = 0.05
 $blr = 1.5e-4
 $minLr = 0
-$warmupEpochs = 40
+$warmupEpochs = 2
 $device = "cuda"
 $seed = 0
-$resume = "C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240821214220\outputs\checkpoint-700.pth"
-$startEpoch = 701
+$resume = ""
+$startEpoch = 0
 $numWorkers = 10
 $pinMem = $true
 $persistentWorkers = $true
 $worldSize = 1
 $localRank = -1
 $distUrl = "env://"
-$normPixLoss = $false
+$normPixLoss = $true
 
 # Activate Python environment (adjust path as necessary)
 & .\.mae-env\Scripts\activate
@@ -49,6 +52,7 @@ $trainingCommand = "python .\main_pretrain.py --data_path $dataPath " +
                     "--output_dir $outputDir " +
                     "--log_dir $logDir " +
                     "--batch_size $batchSize " +
+                    "--checkpoint_freq $checkpoint_freq " +
                     "--epochs $epochs " +
                     "--accum_iter $accumIter " +
                     "--model $model " +

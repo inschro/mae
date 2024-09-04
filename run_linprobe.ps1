@@ -2,18 +2,18 @@
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 
 # Create new directory with timestamp under .\jobs
-$newDir = ".\jobs\$timestamp linprobe"
+$newDir = ".\jobs\" + $timestamp + "_linprobe_random_base_IMNETMINI_wheightedLoss"
 New-Item -ItemType Directory -Force -Path $newDir
 
 # Define configuration variables
 $batchSize = 256
 $epochs = 90
-$accumIter = 2
+$accumIter = 32
 $model = "vit_base_patch16"
 $weightDecay = 0.0
 $blr = 0.1
 $warmupEpochs = 10
-$finetune = "C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240821214220\outputs\checkpoint-799.pth"
+$finetune = "C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240829211247_Pretrain_IMNET1K_random_epoch20_warmup2_modelbase_entropyWeightLoss\outputs\checkpoint-19.pth"
 $dataPath = "C:\Users\Ingo\Desktop\imagenet-mini"
 $nbClasses = 1000
 $outputDir = "$newDir\outputs"

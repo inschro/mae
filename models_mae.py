@@ -182,7 +182,11 @@ class MaskedAutoencoderViT(nn.Module):
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove, 
         """
-        target = self.patchify(imgs)
+        target = self.patchify(imgs) # [N, L, p*p*3]
+
+        # get patch entropies
+        # entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
+
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
@@ -190,6 +194,9 @@ class MaskedAutoencoderViT(nn.Module):
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+
+        # weight the loss by patch entropy
+        # loss = loss * entropies
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
@@ -199,7 +206,21 @@ class MaskedAutoencoderViT(nn.Module):
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
+    
 
+def mae_vit_micro_patch14_dec480d1b(**kwargs):
+    model = MaskedAutoencoderViT(
+        patch_size=14, embed_dim=256, depth=4, num_heads=4,
+        decoder_embed_dim=256, decoder_depth=1, decoder_num_heads=8,
+        mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
+
+def mae_vit_tiny_patch16_dec448d1b(**kwargs):
+    model = MaskedAutoencoderViT(
+        patch_size=16, embed_dim=560, depth=8, num_heads=8,
+        decoder_embed_dim=480, decoder_depth=1, decoder_num_heads=12,
+        mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(
@@ -229,3 +250,6 @@ def mae_vit_huge_patch14_dec512d8b(**kwargs):
 mae_vit_base_patch16 = mae_vit_base_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
 mae_vit_large_patch16 = mae_vit_large_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
 mae_vit_huge_patch14 = mae_vit_huge_patch14_dec512d8b  # decoder: 512 dim, 8 blocks
+
+mae_vit_tiny_patch16 = mae_vit_tiny_patch16_dec448d1b  # decoder: 448 dim, 1 blocks
+mae_vit_micro_patch14 = mae_vit_micro_patch14_dec480d1b  # decoder: 480 dim, 1 blocks
