@@ -12,5 +12,5 @@ def print_checkpoint(path):
             print(f"Training configuration:\n{args_json}\n\n")
 
 if __name__ == "__main__":
-    path = r"C:\Users\Ingo\Desktop\Code Stuff\mae\mae\jobs\20240822215634\_linprobe\outputs\checkpoint-89.pth"
+    path = r"/home/ingo/Desktop/Code Stuff/mae/jobs/darius_logs/entropy/checkpoint-399.pth"
     print_checkpoint(path)
