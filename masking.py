@@ -397,7 +397,7 @@ class MaskingModule(nn.Module):
         
         return information
     
-    def codec_based_masking(self, x, img_pat, masking_ratio=0.75, codec_type='jpeg', num_bins=64, **kwargs):
+    def codec_based_masking(self, x, img_pat, masking_ratio=0.75, codec_type='png', num_bins=64, reverse = False, **kwargs):
         """
         Perform per-sample information-based masking by sorting patches based on their information content.
         
@@ -423,7 +423,7 @@ class MaskingModule(nn.Module):
         patch_info = self.calculate_patch_information(x, codec_type=codec_type, num_bins=num_bins)
         
         # Sort patches by information content
-        ids_shuffle = torch.argsort(patch_info, dim=1, descending=True)
+        ids_shuffle = torch.argsort(patch_info, dim=1, descending=(not reverse))
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # Keep the patches with highest information content
