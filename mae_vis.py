@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 import models_mae
+import masking
 
 # define the utils
 
@@ -74,11 +75,39 @@ def run_one_image(img, model, masking_type, **masking_args):
     plt.show()
 
 
+def run_heatmap_on_image(img,model):
+    x = torch.tensor(img)
+
+    # make it a batch-like
+    x = x.unsqueeze(dim=0)
+    x = torch.einsum('nhwc->nchw', x)
+    x = model.patchify(torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2))
+
+    # run MAE
+    masker =  masking.MaskingModule()
+    y = masker.calculate_patch_information(x)
+    #y = masker.entropy_kde(x)
+    y = y.view((1,14,14))
+
+    plt.subplot(1,3,1)
+    plt.imshow(y[0],cmap='hot' )
+    plt.subplot(1,3,2)
+    plt.imshow(torch.clip((torch.tensor(img) * imagenet_std + imagenet_mean) * 255, 0, 255).int())
+    plt.subplot(1,3,3)
+    entropy_map = np.array(Image.fromarray(y[0].detach().to("cpu").numpy()).resize((224, 224),Image.NEAREST))
+    plt.imshow(torch.clip((torch.tensor(img)* imagenet_std + imagenet_mean) * 255, 0, 255).int())
+    plt.imshow(entropy_map,cmap='hot',alpha=0.5)
+    
+    
+
+    plt.show()
+
+
 
 
 # load an image
 #img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
-# img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
+#img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
 #img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
 #img_url = 'https://cataas.com/cat'
@@ -93,23 +122,32 @@ assert img.shape == (224, 224, 3)
 img = img - imagenet_mean
 img = img / imagenet_std
 
-masking_args = {
-    'masking_ratio': 0.0,
-    'threshold': 0.4,
-    'ratios' : [0.5, 1, 1, 1, 1], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
-    'random' : True
-}
+#masking_args = {
+#    'masking_ratio': 0.0,
+#    'threshold': 0.4,
+#    'ratios' : [0.9,0.6,0.6,0.9], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
+#    'random' : True
+#}
 
+masking_args = {
+    'masking_ratio': 0.95,
+    'threshold': 0.4,
+    'codec_type' : 'jpeg',
+    'reverse' : False,
+    'ratios' : [0.9,0.6,0.6,0.9], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
+    'random' : False
+}
 
 # chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
 # model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
 # run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
 # run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 
-chkpt_dir = r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\mae_visualize_vit_large.pth'
+chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240915160349_Pretrain_IMNET1K_epoch20_entropy_binning__warmup2_modelbase/outputs/checkpoint-19.pth'
 #chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240713152426/outputs/checkpoint-399.pth'
-model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
-#run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
+model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
+run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 #run_one_image(img, model_mae, masking_type='entropy_masking_bins', **masking_args)
-run_one_image(img, model_mae, masking_type='entropy_masking_bins', **masking_args)
+run_one_image(img, model_mae, masking_type='codec_based_masking', **masking_args)
+run_heatmap_on_image(img, model_mae)
