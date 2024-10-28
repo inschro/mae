@@ -3,22 +3,22 @@
 # Generate a timestamp
 timestamp=$(date +"%Y%m%d%H%M%S")
 
-infostr="_Pretrain_IMNET1K_epoch20_entropy_ratio75_warmup2_modelbase"
+infostr="_Pretrain_IMNET1K_epoch20_entropyreverse_entropyweighted_ratio50_warmup2_modelbase"
 
 # Create new directory with timestamp under ./jobs
 newDir="./jobs/${timestamp}${infostr}"
-# newDir="./jobs/20240713152426"
+# newDir="./jobs/test"
 mkdir -p "$newDir"
 
 # Define masking type and arguments
 masking_type="entropy_masking"
-masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
+masking_args=$(echo '{"masking_ratio": 0.50, "reverse": true}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
-dataPath="/media/ingo/imnet_data/imagenet/train"
+dataPath="/media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet/train"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
-batchSize=16
+batchSize=48
 epochs=20
 accumIter=$((4096 / batchSize))
 model="mae_vit_base_patch16"
@@ -28,16 +28,16 @@ blr=1.5e-4
 minLr=0
 warmupEpochs=2
 device="cuda"
-seed=0
+seed=1
 resume=""
 startEpoch=0
-numWorkers=10
+numWorkers=6
 persistentWorkers=true
 pinMem=true
 worldSize=1
 localRank=-1
 distUrl="env://"
-normPixLoss=true
+normPixLoss=false
 checkpoint_freq=2
 
 # Activate Python environment (adjust path as necessary)

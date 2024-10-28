@@ -44,15 +44,15 @@ def evaluate_on_setting(model, dataloader, masking_type, masking_ratio, log_file
 def main(args):
     config = yaml.load(open(args.config_path, 'r'), Loader=yaml.FullLoader)
 
-    match config['model']['architecture']:
-        case 'mae_vit_base_patch16':
-            model = mae_vit_base_patch16()
-        case 'mae_vit_large_patch16':
-            model = mae_vit_large_patch16()
-        case 'mae_vit_huge_patch14':
-            model = mae_vit_huge_patch14()
-        case _:
-            raise ValueError(f"Model {config['model']['architecture']} not recognized")
+    architecture = config['model']['architecture']
+    if architecture == 'mae_vit_base_patch16':
+        model = mae_vit_base_patch16()
+    elif architecture == 'mae_vit_large_patch16':
+        model = mae_vit_large_patch16()
+    elif architecture == 'mae_vit_huge_patch14':
+        model = mae_vit_huge_patch14()
+    else:
+        raise ValueError(f"Model {architecture} not recognized")
         
     checkpoint = torch.load(config['model']['checkpoint'], map_location=args.device)
     model.load_state_dict(checkpoint['model'])
@@ -103,7 +103,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate MAE model on ImageNet')
-    parser.add_argument('--config_path', default=r'C:\Users\Ingo\Desktop\Code Stuff\mae\mae\configs\config_eval.yaml', type=str)
+    parser.add_argument('--config_path', default=r'/home/ingo/Desktop/code_stuff/mae/configs/config_eval.yaml', type=str)
     parser.add_argument('--device', default='cuda', type=str)
     args = parser.parse_args()
     

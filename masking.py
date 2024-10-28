@@ -52,7 +52,7 @@ class MaskingModule(nn.Module):
         masking_ratio = torch.rand(1).item() * (masking_ratio_max - masking_ratio_min) + masking_ratio_min
         return self.random_masking(x, masking_ratio=masking_ratio, **kwargs)
     
-    def entropy_masking(self, x, img_pat, masking_ratio=0.75, **kwargs): #TODO THIS is a temporary workaround as img_pat is only accessed in entropy based masking
+    def entropy_masking(self, x, img_pat, masking_ratio=0.75, reverse=False, **kwargs): #TODO THIS is a temporary workaround as img_pat is only accessed in entropy based masking
         """
         Perform per-sample entropy-based masking by sorting by entropy.
         x: [N, L, D], sequence
@@ -64,7 +64,8 @@ class MaskingModule(nn.Module):
         entropies = self.entropy(img_pat, num_bins=10)
         
         # sort by entropy
-        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        descending = not reverse
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=descending) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset

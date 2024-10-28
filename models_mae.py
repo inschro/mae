@@ -185,7 +185,7 @@ class MaskedAutoencoderViT(nn.Module):
         target = self.patchify(imgs) # [N, L, p*p*3]
 
         # get patch entropies
-        # entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
+        entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
 
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
@@ -196,7 +196,11 @@ class MaskedAutoencoderViT(nn.Module):
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
         # weight the loss by patch entropy
-        # loss = loss * entropies
+        loss = loss * entropies
+
+        # normalize by the mean entropy
+        loss /= entropies.mean()
+
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss

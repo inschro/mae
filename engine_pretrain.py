@@ -37,8 +37,9 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 100
+    print_freq = 1000
     masking_args = _parse_masking_args(args.masking_args)
+    nan_count = 0
 
     accum_iter = args.accum_iter
 
@@ -55,14 +56,16 @@ def train_one_epoch(model: torch.nn.Module,
 
         samples = samples.to(device, non_blocking=True)
 
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast('cuda'):
             loss, _, _ = model(samples, masking_type=args.masking_type, **masking_args)
 
         loss_value = loss.item()
 
+        # Playing NaN Limbo
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+            print(f"Loss is {loss_value}, skipping this iteration")
+            nan_count += 1
+            continue
 
         loss /= accum_iter
         loss_scaler(loss, optimizer, parameters=model.parameters(),
@@ -86,6 +89,8 @@ def train_one_epoch(model: torch.nn.Module,
             log_writer.add_scalar('train_loss', loss_value_reduce, epoch_1000x)
             log_writer.add_scalar('lr', lr, epoch_1000x)
 
+    # Print NaN count
+    print(f'Epoch {epoch} NaN count: {nan_count}')
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
