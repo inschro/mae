@@ -1,6 +1,8 @@
 import torch
 from torch import nn
-
+import torch.nn.functional as F
+from torch.fft import fft as torchfft #weird version bug
+torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
 class MaskingModule(nn.Module):
     def __init__(self, epsilon = 1e-19):
@@ -117,7 +119,7 @@ class MaskingModule(nn.Module):
         entropies = self.entropy_kde(img_pat)
         
         # sort by entropy
-        ids_shuffle = torch.argsort(entropies, dim=1, descending=True) # descend: large is keep, small is remove
+        ids_shuffle = torch.argsort(entropies, dim=1, descending=False) # descend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
@@ -329,11 +331,120 @@ class MaskingModule(nn.Module):
 
         return mean_frequency
     
+    @staticmethod
+    def dct2d(x):
+        """
+        Implement 2D DCT using FFT
+        """
+        X1 = torchfft(x, dim=2)
+        X2 = torchfft(X1, dim=3)
+
+        def dct_kernel(n):
+            k = torch.arange(n, dtype=x.dtype, device=x.device)
+            return torch.cos((torch.pi / (2 * n)) * k)
+
+        k1 = dct_kernel(x.shape[2]).view(1, 1, -1, 1)
+        k2 = dct_kernel(x.shape[3]).view(1, 1, 1, -1)
+
+        return 4 * torch.real(X2 * k1 * k2)
+    
+    def calculate_patch_information(self, x, codec_type='jpeg', num_bins=64):
+        """
+        Calculate the information within a patch using different image codecs.
+        
+        Args:
+        x (torch.Tensor): Input tensor of shape [N, L, D], where N is batch size,
+                          L is number of patches, and D is patch dimension.
+        codec_type (str): Type of codec to simulate ('jpeg', 'png', or 'entropy').
+        num_bins (int): Number of bins for entropy calculation.
+        
+        Returns:
+        torch.Tensor: Information content of each patch.
+        """
+        
+        N, L, D = x.shape
+        
+        if codec_type == 'jpeg':
+            # Reshape to 2D representation without assuming square patch
+            x_reshaped = x.view(N * L, 1, -1, 8)  # Assume minimum width of 8
+            
+            # Pad to next power of 2 if necessary
+            h, w = x_reshaped.shape[2], x_reshaped.shape[3]
+            target_h = 2**((h - 1).bit_length())
+            target_w = 2**((w - 1).bit_length())
+            pad_h = target_h - h
+            pad_w = target_w - w
+            
+            if pad_h > 0 or pad_w > 0:
+                x_reshaped = F.pad(x_reshaped, (0, pad_w, 0, pad_h))
+            
+            dct_coeffs = self.dct2d(x_reshaped)
+            information = torch.sum(torch.abs(dct_coeffs), dim=(1, 2, 3)).view(N, L)
+        
+        elif codec_type == 'png':
+            # Reshape to 2D representation without assuming square patch
+            x_reshaped = x.view(N * L, 1, -1, 8)  # Assume minimum width of 8
+            
+            grad_x = F.conv2d(x_reshaped, torch.tensor([[[[1, -1]]]], dtype=x.dtype, device=x.device), padding=(0, 1))
+            grad_y = F.conv2d(x_reshaped, torch.tensor([[[[1], [-1]]]], dtype=x.dtype, device=x.device), padding=(1, 0))
+            information = (torch.sum(torch.abs(grad_x), dim=(1, 2, 3)) + 
+                           torch.sum(torch.abs(grad_y), dim=(1, 2, 3))).view(N, L)
+        
+        elif codec_type == 'entropy':
+            information = self.entropy(x, dim=-1, num_bins=num_bins)
+        
+        else:
+            raise ValueError(f"Unsupported codec type: {codec_type}")
+        
+        return information
+    
+    def codec_based_masking(self, x, img_pat, masking_ratio=0.75, codec_type='jpeg', num_bins=64, **kwargs):
+        """
+        Perform per-sample information-based masking by sorting patches based on their information content.
+        
+        Args:
+        x (torch.Tensor): Input tensor of shape [N, L, D], where N is batch size,
+                          L is number of patches, and D is patch dimension.
+        img_pat (torch.Tensor): Image patches (not used in this method, kept for consistency with other methods).
+        masking_ratio (float): Ratio of patches to mask.
+        codec_type (str): Type of codec to use for information calculation ('jpeg', 'png', or 'entropy').
+        num_bins (int): Number of bins for entropy calculation (used only if codec_type is 'entropy').
+        **kwargs: Additional keyword arguments.
+        
+        Returns:
+        tuple: (x_masked, mask, ids_restore)
+            x_masked (torch.Tensor): Masked input tensor.
+            mask (torch.Tensor): Binary mask tensor.
+            ids_restore (torch.Tensor): Tensor containing indices to restore original order.
+        """
+        N, L, D = x.shape
+        len_keep = int(L * (1 - masking_ratio))
+
+        # Calculate patch information
+        patch_info = self.calculate_patch_information(x, codec_type=codec_type, num_bins=num_bins)
+        
+        # Sort patches by information content
+        ids_shuffle = torch.argsort(patch_info, dim=1, descending=True)
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # Keep the patches with highest information content
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # Generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+    
 if __name__ == '__main__':
     import requests
     from PIL import Image
     import numpy as np
     import models_mae
+    import matplotlib
+    matplotlib.use('qt5agg')
     import matplotlib.pyplot as plt
 
     imagenet_mean = np.array([0.485, 0.456, 0.406])
@@ -355,7 +466,7 @@ if __name__ == '__main__':
 
     print(x.shape)
 
-    masked_x, mask, ids_restore = masking.entropy_masking_bins(x, x, ratios=[1, 1, 0, 1], random=False)
+    masked_x, mask, ids_restore = masking.codec_based_masking(x, x)
 
     print(masked_x.shape, mask.shape, ids_restore.shape)
     print(mask[0, :20])
