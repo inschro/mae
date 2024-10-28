@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.fft import fft as torchfft #weird version bug
+torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
 class MaskingModule(nn.Module):
     def __init__(self, epsilon = 1e-19):
@@ -328,6 +330,23 @@ class MaskingModule(nn.Module):
 
         return mean_frequency
     
+    @staticmethod
+    def dct2d(x):
+        """
+        Implement 2D DCT using FFT
+        """
+        X1 = torchfft(x, dim=2)
+        X2 = torchfft(X1, dim=3)
+
+        def dct_kernel(n):
+            k = torch.arange(n, dtype=x.dtype, device=x.device)
+            return torch.cos((torch.pi / (2 * n)) * k)
+
+        k1 = dct_kernel(x.shape[2]).view(1, 1, -1, 1)
+        k2 = dct_kernel(x.shape[3]).view(1, 1, 1, -1)
+
+        return 4 * torch.real(X2 * k1 * k2)
+    
     def calculate_patch_information(self, x, codec_type='jpeg', num_bins=64):
         """
         Calculate the information within a patch using different image codecs.
@@ -342,22 +361,6 @@ class MaskingModule(nn.Module):
         torch.Tensor: Information content of each patch.
         """
         
-        @staticmethod
-        def dct2d(x):
-            """
-            Implement 2D DCT using FFT
-            """
-            X1 = torch.fft.fft(x, dim=2)
-            X2 = torch.fft.fft(X1, dim=3)
-
-            def dct_kernel(n):
-                k = torch.arange(n, dtype=x.dtype, device=x.device)
-                return torch.cos((torch.pi / (2 * n)) * k)
-
-            k1 = dct_kernel(x.shape[2]).view(1, 1, -1, 1)
-            k2 = dct_kernel(x.shape[3]).view(1, 1, 1, -1)
-
-            return 4 * torch.real(X2 * k1 * k2)
         N, L, D = x.shape
         
         if codec_type == 'jpeg':
@@ -374,7 +377,7 @@ class MaskingModule(nn.Module):
             if pad_h > 0 or pad_w > 0:
                 x_reshaped = F.pad(x_reshaped, (0, pad_w, 0, pad_h))
             
-            dct_coeffs = dct2d(x_reshaped)
+            dct_coeffs = self.dct2d(x_reshaped)
             information = torch.sum(torch.abs(dct_coeffs), dim=(1, 2, 3)).view(N, L)
         
         elif codec_type == 'png':
