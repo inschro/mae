@@ -13,6 +13,7 @@ import sys
 from typing import Iterable
 
 import torch
+import torch.amp
 
 import util.misc as misc
 import util.lr_sched as lr_sched

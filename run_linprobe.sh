@@ -4,7 +4,7 @@
 timestamp=$(date +"%Y%m%d%H%M%S")
 
 # Create new directory with timestamp under ./jobs
-newDir="./jobs/${timestamp}_linprobe_entropyreverse_ratio75_warmup2_modelbase"
+newDir="./jobs/${timestamp}_linprobe_pretrain-imnet20_bins9669_warmup10_modelbase"
 mkdir -p "$newDir"
 
 # Define configuration variables
@@ -15,7 +15,7 @@ model="vit_base_patch16"
 weightDecay=0.0
 blr=0.1
 warmupEpochs=10
-finetune="/home/ingo/Desktop/code_stuff/mae/jobs/20241001182847_Pretrain_IMNET1K_epoch20_entropyreverse_ratio75_warmup2_modelbase/outputs/checkpoint-19.pth"
+finetune="/home/ingo/Desktop/code_stuff/mae/jobs/darius_logs/bin/checkpoint-19.pth"
 dataPath="/media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet-mini/"
 nbClasses=1000
 outputDir="$newDir/outputs"
