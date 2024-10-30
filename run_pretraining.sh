@@ -15,7 +15,7 @@ masking_type="entropy_masking"
 masking_args=$(echo '{"masking_ratio": 0.50, "reverse": true}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
-dataPath="/media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet/train"
+dataPath="/home/darius/Dokumente/Research/mae/data/imagnet-mini/train"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
 batchSize=48
