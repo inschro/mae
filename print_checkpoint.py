@@ -12,5 +12,5 @@ def print_checkpoint(path):
             print(f"Training configuration:\n{args_json}\n\n")
 
 if __name__ == "__main__":
-    path = r"/home/ingo/Desktop/Code Stuff/mae/jobs/darius_logs/entropy/checkpoint-399.pth"
+    path = r"/home/ingo/Desktop/code_stuff/mae/jobs/20240815093102_random/outputs/checkpoint-399.pth"
     print_checkpoint(path)

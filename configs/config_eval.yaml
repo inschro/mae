@@ -1,5 +1,5 @@
 data:
-  path: C:/Users/Ingo/Desktop/imagenet-mini/val/
+  path: /media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet-mini/val
   batch_size: 48
   num_workers: 10
   shuffle: False
@@ -9,7 +9,7 @@ data:
 
 model:
   architecture: mae_vit_base_patch16
-  checkpoint: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/jobs/20240821214220/outputs/checkpoint-160.pth
+  checkpoint: /home/ingo/Desktop/code_stuff/mae/jobs/20240820044336_entropy/outputs/checkpoint-399.pth
 
 output:
   path: C:/Users/Ingo/Desktop/Code Stuff/mae/mae/eval

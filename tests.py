@@ -1,21 +1,46 @@
-import torch
+from masking import MaskingModule
+import matplotlib.pyplot as plt
+from PIL import Image
+import requests
+import numpy as np
 from models_mae import mae_vit_base_patch16
-import time
+import torch
+print(torch.__version__)
 
+
+masking = MaskingModule()
+
+img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
+img = Image.open(requests.get(img_url, stream=True).raw)
+img = img.resize((224, 224))
+img = np.array(img) / 255.
+
+# plot original image left
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+plt.imshow(img)
+plt.title('Original Image')
+plt.axis('off')
+
+# create entropy map
+img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0) # (1, 3, 224, 224)
 model = mae_vit_base_patch16()
+patchified_img = model.patchify(img) # [1, L, 3*16*16]
+print(patchified_img.shape)
+entropies = masking.entropy(patchified_img, dim=-1) # [1, L]
+print(entropies.shape)
+entropies = entropies.squeeze().reshape(14, 14)
 
-masking_type = "random_masking"
-masking_args = {
-    "masking_ration": 0.75,
-}
 
-# test different batch sizes and test memory usage
-sizes = [16, 32, 64, 128, 256, 512, 1024, 2048]
 
-for size in sizes:
-    input_tensor = torch.randn(size, 3, 244, 244)
-    torch.cuda.empty_cache()  # Clear cache before each run
-    start_memory = torch.cuda.memory_allocated()
-    output = model(input_tensor, masking_type = masking_type, **masking_args)
-    end_memory = torch.cuda.memory_allocated()
-    print(f"Batch size: {size}, Memory allocated: {end_memory - start_memory} bytes")
+# convert to numpy
+entropies = entropies.detach().cpu().numpy()
+
+# plot entropy map right
+plt.subplot(1, 2, 2)
+plt.imshow(entropies, cmap='hot')
+plt.title('Entropy Map')
+plt.axis('off')
+plt.colorbar()
+
+plt.show()
