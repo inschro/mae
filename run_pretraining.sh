@@ -1,4 +1,21 @@
 #!/bin/bash
+#SBATCH --job-name=mae_pretrain
+#SBATCH --output=/beegfs/work/mae_entr/mae/slurm/out/%x_%j.out # Standard output log (%x = job name, %j = job ID)
+#SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=16G
+#SBATCH --gres=gpu:1080:1
+#SBATCH --partition=gpu
+#SBATCH --time=1-00:00:00
+
+# Create the output directories if they don't exist
+mkdir -p /beegfs/work/mae_entr/mae/slurm/out /beegfs/work/mae_entr/mae/slurm/err
+
+module load anaconda/3-5.0.1
+module load cuda/12.2
+source activate /beegfs/work/mae_entr/conda_envs/mae_env
+echo "Activated conda environment successfully."
+
 
 # Generate a timestamp
 timestamp=$(date +"%Y%m%d%H%M%S")
@@ -6,16 +23,16 @@ timestamp=$(date +"%Y%m%d%H%M%S")
 infostr="_Pretrain_IMNET1K_epoch20_entropyreverse_entropyweighted_ratio50_warmup2_modelbase"
 
 # Create new directory with timestamp under ./jobs
-newDir="./jobs/${timestamp}${infostr}"
+newDir="/beegfs/work/mae_entr/mae/jobs/${timestamp}${infostr}"
 # newDir="./jobs/test"
 mkdir -p "$newDir"
 
 # Define masking type and arguments
-masking_type="entropy_masking"
-masking_args=$(echo '{"masking_ratio": 0.50, "reverse": true}' | jq -c . | sed 's/"/\\"/g')
+masking_type="random_masking"
+masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
-dataPath="/media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet/train"
+dataPath="/beegfs/data/shared/imagenet/imagenet100/train/"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
 batchSize=48
