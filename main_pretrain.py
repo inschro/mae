@@ -117,8 +117,8 @@ def get_args_parser():
 def main(args):
     misc.init_distributed_mode(args)
 
-    print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
-    print("{}".format(args).replace(', ', ',\n'))
+    print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))), flush=True)
+    print("{}".format(args).replace(', ', ',\n'), flush=True)
 
     device = torch.device(args.device)
 
@@ -161,6 +161,7 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=True,
         persistent_workers=args.persistent_workers,
+        prefetch_factor=4,
     )
     
     # define the model

@@ -153,7 +153,7 @@ class MetricLogger(object):
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
                         time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB))
+                        memory=torch.cuda.max_memory_allocated() / MB), flush=True)
                 else:
                     print(log_msg.format(
                         i, len(iterable), eta=eta_string,
@@ -164,7 +164,7 @@ class MetricLogger(object):
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('{} Total time: {} ({:.4f} s / it)'.format(
-            header, total_time_str, total_time / len(iterable)))
+            header, total_time_str, total_time / len(iterable)), flush=True)
 
 
 def setup_for_distributed(is_master):
@@ -215,6 +215,7 @@ def save_on_master(*args, **kwargs):
 
 def init_distributed_mode(args):
     if args.dist_on_itp:
+        print('Using distributed mode on ITP')
         args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
         args.gpu = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
@@ -222,14 +223,16 @@ def init_distributed_mode(args):
         os.environ['LOCAL_RANK'] = str(args.gpu)
         os.environ['RANK'] = str(args.rank)
         os.environ['WORLD_SIZE'] = str(args.world_size)
-        # ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
-    elif 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ['WORLD_SIZE'])
-        args.gpu = int(os.environ['LOCAL_RANK'])
-    elif 'SLURM_PROCID' in os.environ:
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
+        ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
+    # elif 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+    #     print('Using distributed mode on SLURM with RANK an WORLD_SIZE')
+    #     args.rank = int(os.environ["RANK"])
+    #     args.world_size = int(os.environ['WORLD_SIZE'])
+    #     args.gpu = int(os.environ['LOCAL_RANK'])
+    # elif 'SLURM_PROCID' in os.environ:
+    #     print('Using distributed mode on SLURM with SLURM_PROCID')
+    #     args.rank = int(os.environ['SLURM_PROCID'])
+    #     args.gpu = args.rank % torch.cuda.device_count()
     else:
         print('Not using distributed mode')
         setup_for_distributed(is_master=True)  # hack

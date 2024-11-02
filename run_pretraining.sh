@@ -4,8 +4,9 @@
 #SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH --gres=gpu:1080:1
+#SBATCH --gres=gpu:1080:2
 #SBATCH --partition=gpu
+#SBATCH --nodelist=gpu03
 #SBATCH --time=1-00:00:00
 
 # Create the output directories if they don't exist
@@ -29,26 +30,27 @@ mkdir -p "$newDir"
 
 # Define masking type and arguments
 masking_type="random_masking"
-masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
+masking_args='{"masking_ratio":0.75}'
+# masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
 dataPath="/beegfs/data/shared/imagenet/imagenet100/train/"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
 batchSize=48
-epochs=20
+epochs=1
 accumIter=$((4096 / batchSize))
-model="mae_vit_base_patch16"
+model="mae_vit_large_patch16"
 inputSize=224
 weightDecay=0.05
 blr=1.5e-4
 minLr=0
 warmupEpochs=2
 device="cuda"
-seed=1
+seed=0
 resume=""
 startEpoch=0
-numWorkers=6
+numWorkers=8
 persistentWorkers=true
 pinMem=true
 worldSize=1
@@ -57,32 +59,29 @@ distUrl="env://"
 normPixLoss=false
 checkpoint_freq=2
 
-# Activate Python environment (adjust path as necessary)
-conda activate ml
-
 # Construct the training command with mandatory arguments
-trainingCommand="python ./main_pretrain.py --data_path $dataPath \
-                --output_dir $outputDir \
-                --log_dir $logDir \
-                --batch_size $batchSize \
-                --epochs $epochs \
-                --accum_iter $accumIter \
-                --model $model \
-                --input_size $inputSize \
-                --masking_type $masking_type \
-                --masking_args \"$masking_args\" \
-                --weight_decay $weightDecay \
-                --blr $blr \
-                --min_lr $minLr \
-                --warmup_epochs $warmupEpochs \
-                --device $device \
-                --seed $seed \
-                --start_epoch $startEpoch \
-                --num_workers $numWorkers \
-                --world_size $worldSize \
-                --local_rank $localRank \
-                --dist_url $distUrl \
-                --checkpoint_freq $checkpoint_freq"
+trainingCommand="python ./main_pretrain.py --data_path $dataPath"
+trainingCommand+=" --output_dir $outputDir"
+trainingCommand+=" --log_dir $logDir"
+trainingCommand+=" --batch_size $batchSize"
+trainingCommand+=" --epochs $epochs"
+trainingCommand+=" --accum_iter $accumIter"
+trainingCommand+=" --model $model"
+trainingCommand+=" --input_size $inputSize"
+trainingCommand+=" --masking_type $masking_type"
+trainingCommand+=" --masking_args '$masking_args'" # Note: masking_args is a JSON string, single quotes are necessary
+trainingCommand+=" --weight_decay $weightDecay"
+trainingCommand+=" --blr $blr"
+trainingCommand+=" --min_lr $minLr"
+trainingCommand+=" --warmup_epochs $warmupEpochs"
+trainingCommand+=" --device $device"
+trainingCommand+=" --seed $seed"
+trainingCommand+=" --start_epoch $startEpoch"
+trainingCommand+=" --num_workers $numWorkers"
+trainingCommand+=" --world_size $worldSize"
+trainingCommand+=" --local_rank $localRank"
+trainingCommand+=" --dist_url $distUrl"
+trainingCommand+=" --checkpoint_freq $checkpoint_freq"
 
 # Add conditional arguments
 if [ -n "$resume" ]; then
@@ -102,6 +101,6 @@ fi
 echo "Training Command: $trainingCommand"
 
 # Execute the training command
-eval "$trainingCommand"
+srun $trainingCommand
 
 # Optional: Add any post-training commands here, like logging or sending a notification

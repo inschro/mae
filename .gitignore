@@ -24,3 +24,9 @@ eval/
 debug_info_mail.py
 sandbox/
 demo/
+
+/slurm
+/slurm/*
+
+*.sh
+*.ps1
