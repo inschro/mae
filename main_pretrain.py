@@ -113,7 +113,7 @@ def get_args_parser():
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
-    parser.add_argument('--use_profiler', default=False, type = bool,
+    parser.add_argument('--use_profiler', action='store_true',
                         help='profile the FLOPS and output as TODO')
     
 
@@ -129,10 +129,10 @@ def main(args):
     profiler_count_time = False
     profiler_record_shapes = False
     profiler_schedule = schedule(
-    skip_first=1,
-    wait=1,
+    skip_first=5,
+    wait=2,
     warmup=1,
-    active=1,
+    active=2,
     repeat=2)      
 
     misc.init_distributed_mode(args)
