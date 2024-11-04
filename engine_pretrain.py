@@ -40,7 +40,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 50
+    print_freq = 100
     masking_args = _parse_masking_args(args.masking_args)
     nan_count = 0
 
