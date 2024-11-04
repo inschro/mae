@@ -30,3 +30,5 @@ demo/
 
 *.sh
 *.ps1
+
+run_pretraining.sh

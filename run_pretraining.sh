@@ -2,10 +2,9 @@
 #SBATCH --job-name=mae_pretrain
 #SBATCH --output=/beegfs/work/mae_entr/mae/slurm/out/%x_%j.out # Standard output log (%x = job name, %j = job ID)
 #SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
-#SBATCH --cpus-per-task=6
-#SBATCH --mem=256G
-#SBATCH --gres=gpu:a100:1
-#SBatch --nodelist=gpu06
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --gres=gpu:2080:1
 #SBATCH --partition=gpu
 #SBATCH --time=0-01:00:00
 
@@ -39,10 +38,10 @@ masking_args='{"masking_ratio":0.75}'
 # masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
-dataPath="/beegfs/data/shared/imagenet/imagenet100/train/"
+dataPath="/beegfs/data/shared/imagenet/ILSVRC/Data/CLS-LOC/train/"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
-batchSize=256
+batchSize=32
 epochs=1
 accumIter=$((4096 / batchSize))
 model="mae_vit_large_patch16"
