@@ -1,20 +1,20 @@
 #!/bin/bash
-#SBATCH --job-name=mae_pretrain
+#SBATCH --job-name=random75
 #SBATCH --output=/beegfs/work/mae_entr/mae/slurm/out/%x_%j.out # Standard output log (%x = job name, %j = job ID)
 #SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --gres=gpu:2080:1
+#SBATCH --mem=64G
+#SBATCH --gres=gpu:a100:1
 #SBATCH --partition=gpu
-#SBATCH --time=0-01:00:00
+#SBATCH --time=30-00:00:00
+
+# Create the output directories if they don't exist
+mkdir -p /beegfs/work/mae_entr/mae/slurm/out /beegfs/work/mae_entr/mae/slurm/err
 
 # Echo the contents of the script for reproducibility
 echo "### SLURM SCRIPT CONTENTS ###"
 cat "$0"
 echo "############################"
-
-# Create the output directories if they don't exist
-mkdir -p /beegfs/work/mae_entr/mae/slurm/out /beegfs/work/mae_entr/mae/slurm/err
 
 module load anaconda/3-5.0.1
 module load cuda/12.2
@@ -25,31 +25,31 @@ echo "Activated conda environment successfully."
 # Generate a timestamp
 timestamp=$(date +"%Y%m%d%H%M%S")
 
-infostr="_Pretrain_IMNET1K_epoch20_entropyreverse_entropyweighted_ratio50_warmup2_modelbase"
+train_type="pretrain"
+infostr="_${train_type}_maelarge_random75_imnet1k_epoch400_warmup20_a100"
 
 # Create new directory with timestamp under ./jobs
-newDir="/beegfs/work/mae_entr/mae/jobs/${timestamp}${infostr}"
+newDir="/beegfs/work/mae_entr/mae/jobs/${train_type}/${timestamp}${infostr}"
 # newDir="./jobs/test"
 mkdir -p "$newDir"
 
 # Define masking type and arguments
 masking_type="random_masking"
 masking_args='{"masking_ratio":0.75}'
-# masking_args=$(echo '{"masking_ratio": 0.75}' | jq -c . | sed 's/"/\\"/g')
 
 # Define configuration variables
 dataPath="/beegfs/data/shared/imagenet/ILSVRC/Data/CLS-LOC/train/"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
-batchSize=32
-epochs=1
+batchSize=128
+epochs=400
 accumIter=$((4096 / batchSize))
 model="mae_vit_large_patch16"
 inputSize=224
 weightDecay=0.05
 blr=1.5e-4
 minLr=0
-warmupEpochs=2
+warmupEpochs=20
 device="cuda"
 seed=0
 resume=""
@@ -60,8 +60,9 @@ pinMem=true
 worldSize=1
 localRank=-1
 distUrl="env://"
-normPixLoss=false
-checkpoint_freq=2
+normPixLoss=true
+checkpoint_freq=20
+use_profiler=true
 
 # Construct the training command with mandatory arguments
 trainingCommand="python ./main_pretrain.py --data_path $dataPath"
@@ -100,6 +101,9 @@ fi
 if [ "$persistentWorkers" = true ]; then
     trainingCommand+=" --persistent_workers"
 fi
+if [ "$use_profiler" = true ]; then
+    trainingCommand+=" --use_profiler"
+fi
 
 # Echo the training command
 echo "Training Command: $trainingCommand"
@@ -107,4 +111,4 @@ echo "Training Command: $trainingCommand"
 # Execute the training command
 srun $trainingCommand
 
-# Optional: Add any post-training commands here, like logging or sending a notification
+echo "Job completed successfully."

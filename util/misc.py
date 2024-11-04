@@ -342,3 +342,15 @@ def all_reduce_mean(x):
         return x_reduce.item()
     else:
         return x
+    
+
+def set_process_name(prefix=""):
+    import setproctitle
+
+    slurm_id = os.getenv("SLURM_JOB_ID")
+    if slurm_id is not None:
+        setproctitle.setproctitle(f"{prefix}{slurm_id}")
+    else:
+        # use datetime sting
+        now = datetime.datetime.now()
+        setproctitle.setproctitle(f"{prefix}{now.strftime('%m-%d-%H-%M')}")

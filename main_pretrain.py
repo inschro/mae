@@ -34,6 +34,8 @@ import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
+from util.misc import set_process_name
+set_process_name(prefix="mae_pretrain")
 
 import models_mae
 
@@ -129,11 +131,11 @@ def main(args):
     profiler_count_time = False
     profiler_record_shapes = False
     profiler_schedule = schedule(
-    skip_first=5,
-    wait=2,
+    skip_first=25,
+    wait=5,
     warmup=1,
     active=2,
-    repeat=2)      
+    repeat=3)      
 
     misc.init_distributed_mode(args)
 
