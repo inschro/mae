@@ -23,3 +23,6 @@
 3. [ ] Parameter comparison of different models
 4. [ ] Masking scheduler
 
+Data path: 
+/beegfs/data/shared/imagenet/ILSVRC/Data/CLS-LOC/
+

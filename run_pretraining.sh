@@ -2,12 +2,17 @@
 #SBATCH --job-name=mae_pretrain
 #SBATCH --output=/beegfs/work/mae_entr/mae/slurm/out/%x_%j.out # Standard output log (%x = job name, %j = job ID)
 #SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=16G
-#SBATCH --gres=gpu:1080:2
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:a100:1
+#SBatch --nodelist=gpu06
 #SBATCH --partition=gpu
-#SBATCH --nodelist=gpu03
-#SBATCH --time=1-00:00:00
+#SBATCH --time=0-01:00:00
+
+# Echo the contents of the script for reproducibility
+echo "### SLURM SCRIPT CONTENTS ###"
+cat "$0"
+echo "############################"
 
 # Create the output directories if they don't exist
 mkdir -p /beegfs/work/mae_entr/mae/slurm/out /beegfs/work/mae_entr/mae/slurm/err
@@ -37,7 +42,7 @@ masking_args='{"masking_ratio":0.75}'
 dataPath="/beegfs/data/shared/imagenet/imagenet100/train/"
 outputDir="$newDir/outputs"
 logDir="$newDir/logs"
-batchSize=48
+batchSize=256
 epochs=1
 accumIter=$((4096 / batchSize))
 model="mae_vit_large_patch16"
