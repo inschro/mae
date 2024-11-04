@@ -24,3 +24,5 @@ eval/
 debug_info_mail.py
 sandbox/
 demo/
+
+*.sh
