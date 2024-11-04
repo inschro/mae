@@ -15,12 +15,16 @@ import numpy as np
 import os
 import time
 from pathlib import Path
+from contextlib import nullcontext
 
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+
+from torch.profiler import profile, record_function, ProfilerActivity
+from torch.profiler import schedule
 
 import timm
 
@@ -109,12 +113,28 @@ def get_args_parser():
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
+    parser.add_argument('--use_profiler', default=False, type = bool,
+                        help='profile the FLOPS and output as TODO')
     
 
     return parser
 
 
 def main(args):
+
+    # TODO : should we add another param to controll the following?
+    profiler_activities=[ProfilerActivity.CPU,ProfilerActivity.CUDA]
+    profiler_count_flops = True
+    profiler_count_memory = False
+    profiler_count_time = False
+    profiler_record_shapes = False
+    profiler_schedule = schedule(
+    skip_first=1,
+    wait=1,
+    warmup=1,
+    active=1,
+    repeat=2)      
+
     misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))), flush=True)
@@ -197,32 +217,40 @@ def main(args):
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
-        train_stats = train_one_epoch(
-            model, data_loader_train,
-            optimizer, device, epoch, loss_scaler,
-            log_writer=log_writer,
-            args=args
-        )
-        if args.output_dir and (epoch % args.checkpoint_freq == 0 or epoch + 1 == args.epochs):
-            misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
 
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                        'epoch': epoch,}
+    # This uses the profiler
+    with profile(activities=[ProfilerActivity.CPU,ProfilerActivity.CUDA], with_flops=True,schedule=profiler_schedule) if args.use_profiler else nullcontext() as prof:
+        for epoch in range(args.start_epoch, args.epochs):
+            if args.distributed:
+                data_loader_train.sampler.set_epoch(epoch)
+            with record_function("in_epoch"):
+                train_stats = train_one_epoch(
+                    model, data_loader_train,
+                    optimizer, device, epoch, loss_scaler,
+                    log_writer=log_writer,
+                    args=args
+                )
+            if args.use_profiler:
+                prof.step()
+            if args.output_dir and (epoch % args.checkpoint_freq == 0 or epoch + 1 == args.epochs):
+                misc.save_model(
+                    args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                    loss_scaler=loss_scaler, epoch=epoch)
 
-        if args.output_dir and misc.is_main_process():
-            if log_writer is not None:
-                log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-                f.write(json.dumps(log_stats) + "\n")
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
+            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                            'epoch': epoch,}
+            if args.output_dir and misc.is_main_process():
+                if log_writer is not None:
+                    log_writer.flush()
+                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_stats) + "\n")
+        total_time = time.time() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('Training time {}'.format(total_time_str))
+    if args.use_profiler:
+        print(prof.key_averages().table(sort_by="flops", row_limit=10))
+    
+        
 
 
 if __name__ == '__main__':
