@@ -21,6 +21,8 @@ import util.lr_sched as lr_sched
 import json
 
 def _parse_masking_args(arg_str: str):
+    # strip single quotes if present
+    arg_str = arg_str.strip("'")
     try:
         masking_args = json.loads(arg_str)
     except json.JSONDecodeError:
@@ -38,7 +40,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 1000
+    print_freq = 100
     masking_args = _parse_masking_args(args.masking_args)
     nan_count = 0
 

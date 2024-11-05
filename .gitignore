@@ -25,4 +25,10 @@ debug_info_mail.py
 sandbox/
 demo/
 
+/slurm
+/slurm/*
+
 *.sh
+*.ps1
+
+run_pretraining.sh
