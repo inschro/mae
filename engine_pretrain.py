@@ -17,6 +17,7 @@ import torch.amp
 
 import util.misc as misc
 import util.lr_sched as lr_sched
+from util.masking_scheduler import MaskingScheduler
 
 import json
 
@@ -28,6 +29,26 @@ def _parse_masking_args(arg_str: str):
     except json.JSONDecodeError:
         raise ValueError(f"Invalid masking_args: {arg_str}")
     return masking_args
+
+def parse_masking_sched_params(param_string):
+    if param_string is None:
+        return None
+    
+    params = {}
+    for pair in param_string.split(','):
+        key, value = pair.split('=')
+        key = key.strip()
+        value = value.strip()
+        
+        # Convert to appropriate type
+        if key in ['initial_ratio', 'final_ratio']:
+            params[key] = float(value)
+        elif key in ['warmup_epochs']:
+            params[key] = int(value)
+        else:
+            raise ValueError(f"Unknown parameter: {key}")
+    
+    return params
     
 
 
@@ -47,6 +68,14 @@ def train_one_epoch(model: torch.nn.Module,
     accum_iter = args.accum_iter
 
     optimizer.zero_grad()
+    
+    #masking ratio scheduler
+    masking_sched_params = parse_masking_sched_params(args.use_masking_sched)
+
+    if masking_sched_params is not None:
+        masking_scheduler = MaskingScheduler(**masking_sched_params)
+        masking_scheduler.steps_per_epoch = len(data_loader)
+        print(f"Starting epoch {epoch} with a masking ratio of {masking_scheduler((epoch)*len(data_loader))} ending with {masking_scheduler((epoch+1)*len(data_loader))}")
 
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
@@ -58,6 +87,12 @@ def train_one_epoch(model: torch.nn.Module,
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         samples = samples.to(device, non_blocking=True)
+        
+        if masking_sched_params is not None:
+            # TODO check whether key "masking_ratio" exists
+            masking_args["masking_ratio"] = masking_scheduler((data_iter_step)+(epoch)*len(data_loader))
+            
+        
 
         with torch.amp.autocast('cuda'):
             loss, _, _ = model(samples, masking_type=args.masking_type, **masking_args)
