@@ -18,7 +18,7 @@ from timm.models.vision_transformer import PatchEmbed, Block
 
 from util.pos_embed import get_2d_sincos_pos_embed
 
-from masking import MaskingModule
+from util.masking import MaskingModule
 
 
 class MaskedAutoencoderViT(nn.Module):
