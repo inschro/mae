@@ -1,46 +1,44 @@
-from masking import MaskingModule
-import matplotlib.pyplot as plt
-from PIL import Image
-import requests
-import numpy as np
 from models_mae import mae_vit_base_patch16
+
+from torch.profiler import profile, record_function, ProfilerActivity
+
+from torch.optim import AdamW
+
 import torch
-print(torch.__version__)
 
+device = "cuda"
 
-masking = MaskingModule()
+model = mae_vit_base_patch16().to(device)
+optimizer = AdamW(model.parameters(), lr=1e-4)
 
-img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
-img = Image.open(requests.get(img_url, stream=True).raw)
-img = img.resize((224, 224))
-img = np.array(img) / 255.
+input_tensor = torch.randn(32, 3, 224, 224).to(device)
 
-# plot original image left
-plt.figure(figsize=(10, 5))
-plt.subplot(1, 2, 1)
-plt.imshow(img)
-plt.title('Original Image')
-plt.axis('off')
+num_iter = 1
 
-# create entropy map
-img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0) # (1, 3, 224, 224)
-model = mae_vit_base_patch16()
-patchified_img = model.patchify(img) # [1, L, 3*16*16]
-print(patchified_img.shape)
-entropies = masking.entropy(patchified_img, dim=-1) # [1, L]
-print(entropies.shape)
-entropies = entropies.squeeze().reshape(14, 14)
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_flops=True) as prof:
+    with record_function("random_75"):
+        print("random_75")
+        for _ in range(num_iter):
+            loss, _, _ = model(input_tensor, masking_type="random_masking", masking_ratio=0.75)
+            loss.backward()
+            optimizer.step()
+print(prof.key_averages().table(top_level_events_only=True, row_limit=10))
 
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_flops=True) as prof:
+    with record_function("entropy_75"):
+        print("entropy_75")
+        for _ in range(num_iter):
+            loss, _, _ = model(input_tensor, masking_type="entropy_masking", masking_ratio=0.75)
+            loss.backward()
+            optimizer.step()
+print(prof.key_averages().table(top_level_events_only=True, row_limit=10))
 
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_flops=True) as prof:
+    with record_function("entropy_80"):
+        print("entropy_80")
+        for _ in range(num_iter):
+            loss, _, _ = model(input_tensor, masking_type="entropy_masking", masking_ratio=0.80)
+            loss.backward()
+            optimizer.step()
 
-# convert to numpy
-entropies = entropies.detach().cpu().numpy()
-
-# plot entropy map right
-plt.subplot(1, 2, 2)
-plt.imshow(entropies, cmap='hot')
-plt.title('Entropy Map')
-plt.axis('off')
-plt.colorbar()
-
-plt.show()
+print(prof.key_averages().table(sort_by="flops", row_limit=10))
