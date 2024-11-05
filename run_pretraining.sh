@@ -2,11 +2,12 @@
 #SBATCH --job-name=random75
 #SBATCH --output=/beegfs/work/mae_entr/mae/slurm/out/%x_%j.out # Standard output log (%x = job name, %j = job ID)
 #SBATCH --error=/beegfs/work/mae_entr/mae/slurm/err/%x_%j.err  # Standard error log
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:a100:1
+#SBATCH --nodelist=gpu06
 #SBATCH --partition=gpu
-#SBATCH --time=30-00:00:00
+#SBATCH --time=8-00:00:00
 
 # Create the output directories if they don't exist
 mkdir -p /beegfs/work/mae_entr/mae/slurm/out /beegfs/work/mae_entr/mae/slurm/err
@@ -36,6 +37,7 @@ mkdir -p "$newDir"
 # Define masking type and arguments
 masking_type="random_masking"
 masking_args='{"masking_ratio":0.75}'
+entropy_weighting=false
 
 # Define configuration variables
 dataPath="/beegfs/data/shared/imagenet/ILSVRC/Data/CLS-LOC/train/"
@@ -103,6 +105,9 @@ if [ "$persistentWorkers" = true ]; then
 fi
 if [ "$use_profiler" = true ]; then
     trainingCommand+=" --use_profiler"
+fi
+if [ "$entropy_weighting" = true ]; then
+    trainingCommand+=" --entropy_weighting"
 fi
 
 # Echo the training command

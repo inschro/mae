@@ -176,7 +176,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred, mask, entropy_weighting=False):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
@@ -184,8 +184,9 @@ class MaskedAutoencoderViT(nn.Module):
         """
         target = self.patchify(imgs) # [N, L, p*p*3]
 
-        # get patch entropies
-        #entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
+        if entropy_weighting:
+            # get patch entropies
+            entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
 
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
@@ -195,20 +196,20 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
-        # weight the loss by patch entropy
-        #loss = loss * entropies
-
-        # normalize by the mean entropy
-        #loss /= entropies.mean()
+        if entropy_weighting:
+            # weight the loss by patch entropy
+            loss = loss * entropies
+            # normalize by the mean entropy
+            loss /= entropies.mean()
 
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, masking_type, **masking_args):
+    def forward(self, imgs, masking_type, entropy_weighting=False, **masking_args):
         latent, mask, ids_restore = self.forward_encoder(imgs, masking_type, **masking_args)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred, mask)
+        loss = self.forward_loss(imgs, pred, mask, entropy_weighting=entropy_weighting)
         return loss, pred, mask
     
 
