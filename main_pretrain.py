@@ -210,7 +210,12 @@ def main(args):
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
-    
+    else:
+        try:
+            model = torch.compile(model)
+        except Exception as e:
+            print("Error compiling model: %s" % str(e))
+
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.param_groups_layer_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
