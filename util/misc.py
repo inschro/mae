@@ -296,7 +296,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler):
+def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, is_latest=False):
     output_dir = Path(args.output_dir)
     epoch_name = str(epoch)
     if loss_scaler is not None:
@@ -313,7 +313,10 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler):
             save_on_master(to_save, checkpoint_path)
     else:
         client_state = {'epoch': epoch}
-        model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
+        if is_latest:
+            model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-latest", client_state=client_state)
+        else:
+            model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
 
 
 def load_model(args, model_without_ddp, optimizer, loss_scaler):
@@ -321,6 +324,13 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
+        elif args.resume.endswith('-latest'):
+            try:
+                checkpoint = torch.load(args.resume, map_location='cpu')
+            except:
+                # no -latest checkpoint, do not load
+                print("No -latest checkpoint, do not load")
+                return
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
         model_without_ddp.load_state_dict(checkpoint['model'])
