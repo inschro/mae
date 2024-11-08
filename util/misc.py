@@ -300,17 +300,19 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, is
     output_dir = Path(args.output_dir)
     epoch_name = str(epoch)
     if loss_scaler is not None:
-        checkpoint_paths = [output_dir / ('checkpoint-%s.pth' % epoch_name)]
-        for checkpoint_path in checkpoint_paths:
-            to_save = {
-                'model': model_without_ddp.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'epoch': epoch,
-                'scaler': loss_scaler.state_dict(),
-                'args': args,
-            }
+        if is_latest:
+            checkpoint_path = output_dir / 'checkpoint-latest.pth'
+        else:
+            checkpoint_path = output_dir / ('checkpoint-%s.pth' % epoch_name)
+        to_save = {
+            'model': model_without_ddp.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'scaler': loss_scaler.state_dict(),
+            'args': args,
+        }
 
-            save_on_master(to_save, checkpoint_path)
+        save_on_master(to_save, checkpoint_path)
     else:
         client_state = {'epoch': epoch}
         if is_latest:
@@ -324,7 +326,7 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
-        elif args.resume.endswith('-latest'):
+        elif args.resume.endswith('-latest.pth'):
             try:
                 checkpoint = torch.load(args.resume, map_location='cpu')
             except:
