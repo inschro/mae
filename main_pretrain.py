@@ -109,6 +109,9 @@ def get_args_parser():
     parser.add_argument('--persistent_workers', action='store_true',
                         help='If using workers > 0, this reuses workers rather than creating new ones each epoch.')
     parser.set_defaults(persistent_workers=False)
+    parser.add_argument('--use_dali', action='store_true',
+                        help='Use DALI for data loading')
+    parser.set_defaults(use_dali=False)
 
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
@@ -133,7 +136,7 @@ def main(args):
     profiler_count_time = False
     profiler_record_shapes = False
     profiler_schedule = schedule(
-    skip_first=25,
+    skip_first=0,
     wait=5,
     warmup=1,
     active=2,
@@ -153,24 +156,23 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # simple augmentation
-    transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
-    print(dataset_train)
+    num_tasks = misc.get_world_size()
+    global_rank = misc.get_rank()
 
-    if True:  # args.distributed:
-        num_tasks = misc.get_world_size()
-        global_rank = misc.get_rank()
+    if not args.use_dali:
+        # simple augmentation
+        transform_train = transforms.Compose([
+                transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+        dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
+        print(dataset_train)
+
         sampler_train = torch.utils.data.DistributedSampler(
             dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
         )
         print("Sampler_train = %s" % str(sampler_train))
-    else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -178,15 +180,25 @@ def main(args):
     else:
         log_writer = None
 
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True,
-        persistent_workers=args.persistent_workers,
-        prefetch_factor=4,
-    )
+    if args.use_dali:
+        from util.dali import get_dali_dataloader
+        data_loader_train = get_dali_dataloader(
+            data_path=args.data_path, 
+            batch_size=args.batch_size,
+            input_size=args.input_size,
+            num_threads=args.num_workers,
+            device_id=0
+        )
+    else:
+        data_loader_train = torch.utils.data.DataLoader(
+            dataset_train, sampler=sampler_train,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True,
+            persistent_workers=args.persistent_workers,
+            prefetch_factor=128
+        )
     
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
