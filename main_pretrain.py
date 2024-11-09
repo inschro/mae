@@ -70,6 +70,8 @@ def get_args_parser():
     parser.set_defaults(norm_pix_loss=False)
     parser.add_argument('--entropy_weighting', action='store_true', help='Scale loss by patch entropy')
     parser.set_defaults(entropy_weighting=False)
+    parser.add_argument('--compile', action='store_true', help='Compile model')
+    parser.set_defaults(compile=False)
 
     # Optimizer parameters
     parser.add_argument('--weight_decay', type=float, default=0.05,
@@ -222,11 +224,9 @@ def main(args):
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
-    else:
-        try:
-            model = torch.compile(model)
-        except Exception as e:
-            print("Error compiling model: %s" % str(e))
+    
+    if args.compile:
+        model = torch.compile(model=model)
 
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.param_groups_layer_decay(model_without_ddp, args.weight_decay)

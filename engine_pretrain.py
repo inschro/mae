@@ -61,7 +61,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 100
+    print_freq = len(data_loader) // 10
     masking_args = _parse_masking_args(args.masking_args)
     nan_count = 0
     use_dali = args.use_dali
