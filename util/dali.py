@@ -32,7 +32,7 @@ def get_dali_dataloader(data_path, batch_size, input_size, num_threads=4, device
     dali_iterator =  DALIClassificationIterator(
         pipelines=pipeline,
         reader_name="Reader",
-        auto_reset=True
+        auto_reset=False,
     )
     
     return dali_iterator

@@ -20,6 +20,8 @@ import torch
 import torch.distributed as dist
 from numpy import inf
 
+import warnings
+
 
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a
@@ -328,7 +330,9 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
                 args.resume, map_location='cpu', check_hash=True)
         elif args.resume.endswith('-latest.pth'):
             try:
-                checkpoint = torch.load(args.resume, map_location='cpu')
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=FutureWarning)
+                    checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
             except:
                 # no -latest checkpoint, do not load
                 print("No -latest checkpoint, do not load")
@@ -340,6 +344,7 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
         if 'optimizer' in checkpoint and 'epoch' in checkpoint and not (hasattr(args, 'eval') and args.eval):
             optimizer.load_state_dict(checkpoint['optimizer'])
             args.start_epoch = checkpoint['epoch'] + 1
+            print(f"starting from epoch {args.start_epoch}")
             if 'scaler' in checkpoint:
                 loss_scaler.load_state_dict(checkpoint['scaler'])
             print("With optim & sched!")
