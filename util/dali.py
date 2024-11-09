@@ -5,8 +5,9 @@ import nvidia.dali.fn as fn
 
 @pipeline_def
 def dali_train_pipeline(data_path, input_size):
-    jpegs, labels = fn.readers.file(name="Reader", file_root=data_path, random_shuffle=True, initial_fill=100)
-    images = fn.decoders.image(jpegs, device="mixed")
+    jpegs, labels = fn.readers.file(name="Reader", file_root=data_path, random_shuffle=True)
+    jpegs.gpu()
+    images = fn.decoders.image(jpegs, device='mixed')
     images = fn.resize(images, resize_x=input_size, resize_y=input_size)
     images = fn.crop_mirror_normalize(
         images,
@@ -24,7 +25,8 @@ def get_dali_dataloader(data_path, batch_size, input_size, num_threads=4, device
         num_threads=num_threads,
         device_id=device_id,
         data_path=data_path,
-        input_size=input_size
+        input_size=input_size,
+        prefetch_queue_depth={"cpu_size": 2, "gpu_size": 2},
     )
     pipeline.build()
     
@@ -41,14 +43,14 @@ def get_dali_dataloader(data_path, batch_size, input_size, num_threads=4, device
 if __name__ == "__main__":
     
     dataloader = get_dali_dataloader(
-        data_path="/media/ingo/539ea23b-a9e6-475b-993c-4f8f7eab2ac0/imagenet-mini/val",
-        batch_size=64,
+        data_path="/media/ingo/datasets/imagenet-mini/val",
+        batch_size=16,
         input_size=224,
-        num_threads=4,
+        num_threads=2,
         device_id=0
     )
 
     for batch in dataloader:
-        img, label = batch
+        img, label = batch[0]["data"], batch[0]["label"]
         print(img.shape, label)
         break
