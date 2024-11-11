@@ -130,7 +130,6 @@ def get_args_parser():
 
 
 def main(args):
-
     # TODO : should we add another param to controll the following?
     profiler_activities=[ProfilerActivity.CPU,ProfilerActivity.CUDA]
     profiler_count_flops = True

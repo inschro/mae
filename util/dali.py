@@ -5,7 +5,7 @@ import nvidia.dali.fn as fn
 
 @pipeline_def
 def dali_train_pipeline(data_path, input_size):
-    jpegs, labels = fn.readers.file(name="Reader", file_root=data_path, random_shuffle=True)
+    jpegs, labels = fn.readers.file(name="Reader", file_root=data_path, random_shuffle=True, initial_fill=4096)
     jpegs.gpu()
     images = fn.decoders.image(jpegs, device='mixed')
     images = fn.resize(images, resize_x=input_size, resize_y=input_size)
@@ -26,7 +26,7 @@ def get_dali_dataloader(data_path, batch_size, input_size, num_threads=4, device
         device_id=device_id,
         data_path=data_path,
         input_size=input_size,
-        prefetch_queue_depth={"cpu_size": 2, "gpu_size": 2},
+        prefetch_queue_depth={"cpu_size": 2, "gpu_size": 4},
     )
     pipeline.build()
     
