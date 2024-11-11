@@ -438,13 +438,139 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    def grid_masking_patch16_7x7(self, x : torch.Tensor, img_pat, masking_ratio=0.25, reverse=True, random = False, **kwargs):
+        """
+        Divide the patches into 7x7 regions and mask a specified percentage of patches 
+        in each region based on a criterion (e.g., highest or lowest values).
+        
+        Args:
+        - x (torch.Tensor): Input tensor of shape [N, L, D].
+        - img_pat (torch.Tensor): Image patches (not directly used in this method).
+        - masking_ratio (float): Ratio of patches to mask in each 7x7 region.
+        - mask_highest (bool): If True, mask the patches with the highest values, otherwise mask the lowest.
+
+        Returns:
+        - x_masked (torch.Tensor): Masked input tensor.
+        - mask (torch.Tensor): Binary mask tensor.
+        - ids_restore (torch.Tensor): Indices to restore the original order.
+        """
+        
+        N, L, D = x.shape
+        grid_size = 7
+        len_keep = int(grid_size**2 * (1 - masking_ratio)) #
+
+        # compute entropy
+        entropies = self.entropy(img_pat, num_bins=64)
+        
+        # terrible hack
+        offset = torch.zeros_like(entropies)
+        offset = offset.view(N, 14, 14)
+        offset = offset.unfold(1, grid_size, grid_size).unfold(2, grid_size, grid_size)
+        offset = offset.reshape(N, -1, grid_size**2)
+        offset[:, 1, :] = 100
+        offset[:, 2, :] = 200
+        offset[:, 3, :] = 300
+        offset = offset.reshape(N, 2, 2, grid_size, grid_size)
+        offset = offset.permute(0, 1, 3, 2, 4).reshape(N, 14, 14)
+        offset = offset.view(N, 196)
+        entropies += offset
+        
+        num_intervals = 4
+        
+        
+        # Sort by increasing entropy
+        ids_sorted = torch.argsort(entropies, dim=1, descending= not reverse)
+        ids_restore = torch.argsort(ids_sorted, dim=1)
+
+        bin_size = L // num_intervals
+        
+        # i shall be cursed
+        bins = torch.ones([N, num_intervals, bin_size], device=x.device)
+        bins[:, :, :len_keep] = 0
+
+        # flatten bins to mask
+        mask = bins.reshape([N, L])
+        ids_keep = ids_sorted[mask==0].reshape([N,-1])
+        
+        # Unshuffle the mask to get the original order
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        # Create the masked x based on the mask
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        
+        
+        return x_masked, mask, ids_restore
+    
+        
+
+    def grid_masking_patch16_2x2(self, x, img_pat, masking_ratio=0.5, reverse=True, **kwargs):
+        """
+        Divide the patches into 2x2 regions and mask a specified percentage of patches 
+        in each region based on a criterion (e.g., highest or lowest values).
+        
+        Args:
+        - x (torch.Tensor): Input tensor of shape [N, L, D].
+        - img_pat (torch.Tensor): Image patches (not directly used in this method).
+        - masking_ratio (float): Ratio of patches to mask in each 2x2 region.
+        - mask_highest (bool): If True, mask the patches with the highest values, otherwise mask the lowest.
+
+        Returns:
+        - x_masked (torch.Tensor): Masked input tensor.
+        - mask (torch.Tensor): Binary mask tensor.
+        - ids_restore (torch.Tensor): Indices to restore the original order.
+        """
+        N, L, D = x.shape
+        grid_size = 2
+        len_keep = int(grid_size**2 * (1 - masking_ratio)) #
+
+        # compute entropy
+        entropies = self.entropy(img_pat, num_bins=64)
+        
+        # terrible hack ... hardcode this perhaps?
+        offset = torch.zeros_like(entropies)
+        offset = offset.view(N, 14, 14)
+        offset = offset.unfold(1, grid_size, grid_size).unfold(2, grid_size, grid_size)
+        offset = offset.reshape(N, -1, grid_size**2)
+        for i in range(48):
+            offset[:, (i+1), :] = (i+1)*100
+        offset = offset.reshape(N, 7, 7, grid_size, grid_size)
+        offset = offset.permute(0, 1, 3, 2, 4).reshape(N, 14, 14)
+        offset = offset.view(N, 196)
+        entropies += offset
+        
+        num_intervals = 49
+        
+        
+        # Sort by increasing entropy
+        ids_sorted = torch.argsort(entropies, dim=1, descending= not reverse)
+        ids_restore = torch.argsort(ids_sorted, dim=1)
+
+        bin_size = L // num_intervals
+
+        # i shall be cursed
+        bins = torch.ones([N, num_intervals, bin_size], device=x.device)
+        bins[:, :, :len_keep] = 0
+
+        # flatten bins to mask
+        mask = bins.reshape([N, L])
+        ids_keep = ids_sorted[mask==0].reshape([N,-1])
+        
+        # Unshuffle the mask to get the original order
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        # Create the masked x based on the mask
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        
+        
+        return x_masked, mask, ids_restore
+    
 if __name__ == '__main__':
     import requests
     from PIL import Image
     import numpy as np
     import models_mae
     import matplotlib
-    matplotlib.use('qt5agg')
+    #matplotlib.use('qt5agg')
     import matplotlib.pyplot as plt
 
     imagenet_mean = np.array([0.485, 0.456, 0.406])
@@ -466,7 +592,7 @@ if __name__ == '__main__':
 
     print(x.shape)
 
-    masked_x, mask, ids_restore = masking.codec_based_masking(x, x)
+    masked_x, mask, ids_restore = masking.grid_masking_patch16_2x2(x, x)
 
     print(masked_x.shape, mask.shape, ids_restore.shape)
     print(mask[0, :20])
