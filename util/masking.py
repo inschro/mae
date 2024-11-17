@@ -225,7 +225,7 @@ class MaskingModule(nn.Module):
         normalized_tensor = (tensor - min_val) / (max_val - min_val + 1e-19)
 
         # Quantize the tensor
-        quantized_tensor = torch.floor(normalized_tensor * (num_bins - 1)).long()
+        quantized_tensor = torch.floor(normalized_tensor * (num_bins - 1)).long() # num_bins - 1 seems to be a mistake. TODO check this with the paper
 
         # Calculate the counts of each unique value along the specified dimension
         unique_vals, inverse_indices = torch.unique(quantized_tensor, sorted=True, return_inverse=True)
