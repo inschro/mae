@@ -23,8 +23,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
-assert timm.__version__ == "0.3.2" # version check
-from timm.models.layers import trunc_normal_
+# no longer working with timm 0.3.2
+# assert timm.__version__ == "0.3.2" # version check
+from timm.layers import trunc_normal_
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
@@ -155,6 +156,12 @@ def get_args_parser():
     # other parameters
     parser.add_argument('--print_freq', default=20, type=int,
                         help='print frequency')
+    parser.add_argument('--use_dali', action='store_true',
+                        help='use dali for data loading')
+    parser.set_defaults(use_dali=False)
+    parser.add_argument('--compile', action='store_true',
+                        help='use compile')
+    parser.set_defaults(comile=False)
 
     return parser
 
@@ -237,7 +244,7 @@ def main(args):
     )
 
     if args.finetune and not args.eval:
-        checkpoint = torch.load(args.finetune, map_location='cpu')
+        checkpoint = torch.load(args.finetune, map_location='cpu', weights_only=False)
 
         print("Load pre-trained checkpoint from: %s" % args.finetune)
         checkpoint_model = checkpoint['model']
