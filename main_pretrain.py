@@ -160,6 +160,12 @@ def main(args):
     num_tasks = misc.get_world_size()
     global_rank = misc.get_rank()
 
+    if global_rank == 0 and args.log_dir is not None:
+        os.makedirs(args.log_dir, exist_ok=True)
+        log_writer = SummaryWriter(log_dir=args.log_dir)
+    else:
+        log_writer = None
+
     if not args.use_dali:
         # simple augmentation
         transform_train = transforms.Compose([
@@ -175,22 +181,6 @@ def main(args):
         )
         print("Sampler_train = %s" % str(sampler_train))
 
-    if global_rank == 0 and args.log_dir is not None:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None
-
-    if args.use_dali:
-        from util.dali import get_dali_dataloader
-        data_loader_train = get_dali_dataloader(
-            data_path=args.data_path, 
-            batch_size=args.batch_size,
-            input_size=args.input_size,
-            num_threads=args.num_workers,
-            device_id=0
-        )
-    else:
         data_loader_train = torch.utils.data.DataLoader(
             dataset_train, sampler=sampler_train,
             batch_size=args.batch_size,
@@ -200,6 +190,17 @@ def main(args):
             persistent_workers=args.persistent_workers,
             prefetch_factor=128
         )
+    else:
+        from util.dali import DaliDataloader
+        transform = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        data_loader_train = DaliDataloader(
+            data_path=args.data_path,
+            batch_size=args.batch_size,
+            num_threads=args.num_workers,
+            device_id=0,
+            transforms=transform,
+        )
+
     
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
