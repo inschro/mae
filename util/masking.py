@@ -47,7 +47,7 @@ class MaskingModule(nn.Module):
     
     def low_entropy_random_masking(self, x, img_pat, low_entropy_ratio=0.2, masking_ratio=0.5, **kwargs):
         """
-        Perform masking by removing low-entropy patches and randomly masking the rest.
+        Perform masking by ignoring low-entropy patches and randomly masking the rest.
 
         Args:
         x: [N, L, D], sequence
@@ -56,58 +56,53 @@ class MaskingModule(nn.Module):
         masking_ratio: float, ratio of patches to randomly mask
 
         Returns:
-        x_masked: Masked input tensor
-        mask: Binary mask tensor
+        x_masked: Masked input tensor (only non-masked, high-entropy patches)
+        mask: Binary mask tensor (1 for masked patches, 0 for unmasked or ignored)
         ids_restore: Indices to restore original order
-
-        NOTE: low_entropy_ratio + masking_ratio < 1
         """
         N, L, D = x.shape
 
-        masking_ratio = masking_ratio/(1-low_entropy_ratio)
+        # Adjust masking ratio to account for low-entropy patches
+        effective_masking_ratio = masking_ratio / (1 - low_entropy_ratio)
+
         # Calculate entropies
-        entropies = self.entropy(img_pat, dim=-1)
+        entropies = self.entropy_kde(img_pat)
 
         # Sort patches by entropy
         ids_sorted = torch.argsort(entropies, dim=1)  # Ascending order: low entropy first
         len_low_entropy = int(L * low_entropy_ratio)
 
-        # Select low-entropy patches
-        low_entropy_ids = ids_sorted[:, :len_low_entropy]
-
-        # Exclude low-entropy patches from consideration
-        high_entropy_ids = ids_sorted[:, len_low_entropy:]  # Remaining high-entropy patches
-
-        # Mask the low-entropy patches
-        mask = torch.ones([N, L], device=x.device)
-        mask[:, :len_low_entropy] = 1  # Mark low-entropy patches as masked
-
-        # Remaining patches for random masking
-        high_entropy_ids = ids_sorted[:, len_low_entropy:]
-        len_high_entropy_keep = int(high_entropy_ids.shape[1] * (1 - masking_ratio))
+        # Separate low-entropy and high-entropy patches
+        low_entropy_ids = ids_sorted[:, :len_low_entropy]  # Indices of low-entropy patches
+        high_entropy_ids = ids_sorted[:, len_low_entropy:]  # Indices of high-entropy patches
 
         # Random masking within high-entropy patches
-        noise = torch.rand(N, high_entropy_ids.shape[1], device=x.device)
+        len_high_entropy = high_entropy_ids.shape[1]
+        len_high_entropy_keep = int(len_high_entropy * (1 - effective_masking_ratio))
+
+        # Shuffle high-entropy patches for random masking
+        noise = torch.rand(N, len_high_entropy, device=x.device)
         ids_high_entropy_shuffle = torch.argsort(noise, dim=1)
         ids_high_entropy_keep = high_entropy_ids.gather(
             1, ids_high_entropy_shuffle[:, :len_high_entropy_keep]
         )
 
-        # Combine indices
-        ids_keep = ids_high_entropy_keep  # Only keep high-entropy patches after random masking
+        # Combine kept high-entropy patches
+        ids_keep = ids_high_entropy_keep
+
+        # Create restore indices for reordering
         ids_restore = torch.argsort(torch.cat([low_entropy_ids, high_entropy_ids], dim=1), dim=1)
 
+        # Mask tensor
+        mask = torch.ones([N, L], device=x.device)  # Start with all masked (1)
+        mask.scatter_(1, low_entropy_ids, 0)  # Set low-entropy patches to ignored (0)
+        mask.scatter_(1, ids_keep, 0)         # Unmask kept high-entropy patches
+
+        # Masked input tensor: Only the kept high-entropy patches
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-        # Update mask
-        mask[:, len_low_entropy:len_low_entropy + len_high_entropy_keep] = 0  # Unmask the kept high-entropy patches
-        mask = torch.gather(mask, dim=1, index=ids_restore)
-
-        # Unmask low-entropy patches in the mask tensor for loss calculation
-        mask.scatter_(1, low_entropy_ids, 0)  # Set low-entropy patches to 0 (unmasked)
-
         print(f"x_masked: {x_masked.shape}, mask: {mask.shape} ids_restore: {ids_restore.shape}")
         return x_masked, mask, ids_restore
+
 
             
 
