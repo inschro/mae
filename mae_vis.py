@@ -10,6 +10,7 @@ from PIL import Image
 import models_mae
 import util.masking as masking
 
+
 # define the utils
 
 imagenet_mean = np.array([0.485, 0.456, 0.406])
@@ -71,7 +72,7 @@ def run_one_image(img, model, masking_type, **masking_args):
 
     plt.subplot(1, 4, 4)
     show_image(im_paste[0], "reconstruction + visible")
-    plt.savefig(f"/home/mae_entr/work/mae/demo/tmp/{masking_type}.png")
+    plt.savefig(f"./demo/tmp/{masking_type}.png")
     plt.close()
 
 
@@ -98,7 +99,7 @@ def run_heatmap_on_image(img,model):
     plt.imshow(torch.clip((torch.tensor(img)* imagenet_std + imagenet_mean) * 255, 0, 255).int())
     plt.imshow(entropy_map,cmap='hot',alpha=0.5)
     
-    plt.savefig("/home/mae_entr/work/mae/demo/tmp/heatmap.png")
+    plt.savefig("./demo/tmp/heatmap.png")
     plt.close()
 
 
@@ -108,12 +109,12 @@ def run_heatmap_on_image(img,model):
 #img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
 #img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 #
-# img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
+img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
 #img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
 #img_url = 'https://cataas.com/cat'
 
-#img = Image.open(requests.get(img_url, stream=True).raw)
-img = Image.open("/beegfs/data/shared/imagenet/imagenet100/val/n01820546/ILSVRC2012_val_00019716.JPEG")
+img = Image.open(requests.get(img_url, stream=True).raw)
+#img = Image.open("/beegfs/data/shared/imagenet/imagenet100/val/n01820546/ILSVRC2012_val_00019716.JPEG")
 img = img.resize((224, 224))
 img = np.array(img) / 255.
 
@@ -131,24 +132,25 @@ img = img / imagenet_std
 #}
 
 masking_args = {
-    'masking_ratio': 0.8,
+    'masking_ratio': 9/196,
     'threshold': 0.4,
     'codec_type' : 'jpeg',
     'reverse' : False,
     'ratios' : [0.9,0.6,0.6,0.9], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
-    'random' : False
+    'random' : False,
+    'low_entropy_ratio' : 170/196,
 }
-
+#torch.random.manual_seed(4)
 # chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
 # model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
 # run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
 # run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 
-chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/20241105191139_pretrain_maebase_random_shed6to9_imnet100_epoch200_warmup40_2080/outputs/checkpoint-80.pth'
-#chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240713152426/outputs/checkpoint-399.pth'
-model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
-run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
+#chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/20241105191139_pretrain_maebase_random_shed6to9_imnet100_epoch200_warmup40_2080/outputs/checkpoint-80.pth'
+chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240915160349_Pretrain_IMNET1K_epoch20_entropy_binning__warmup2_modelbase/outputs/checkpoint-19.pth'
+model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
+run_one_image(img, model_mae, masking_type='low_entropy_random_masking', **masking_args)
 #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 #run_one_image(img, model_mae, masking_type='entropy_masking_bins', **masking_args)
-run_one_image(img, model_mae, masking_type='codec_based_masking', **masking_args)
+#run_one_image(img, model_mae, masking_type='codec_based_masking', **masking_args)
 run_heatmap_on_image(img, model_mae)
