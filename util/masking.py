@@ -45,6 +45,74 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
+    def low_entropy_random_masking(self, x, img_pat, low_entropy_ratio=0.2, masking_ratio=0.5, **kwargs):
+        """
+        Perform masking by removing low-entropy patches and randomly masking the rest.
+
+        Args:
+        x: [N, L, D], sequence
+        img_pat: [N, L, patch_dim], image patches
+        low_entropy_ratio: float, ratio of low-entropy patches to remove
+        masking_ratio: float, ratio of patches to randomly mask
+
+        Returns:
+        x_masked: Masked input tensor
+        mask: Binary mask tensor
+        ids_restore: Indices to restore original order
+
+        NOTE: low_entropy_ratio + masking_ratio < 1
+        """
+        N, L, D = x.shape
+
+        masking_ratio = masking_ratio/(1-low_entropy_ratio)
+        # Calculate entropies
+        entropies = self.entropy(img_pat, dim=-1)
+
+        # Sort patches by entropy
+        ids_sorted = torch.argsort(entropies, dim=1)  # Ascending order: low entropy first
+        len_low_entropy = int(L * low_entropy_ratio)
+
+        # Select low-entropy patches
+        low_entropy_ids = ids_sorted[:, :len_low_entropy]
+
+        # Exclude low-entropy patches from consideration
+        high_entropy_ids = ids_sorted[:, len_low_entropy:]  # Remaining high-entropy patches
+
+        # Mask the low-entropy patches
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_low_entropy] = 1  # Mark low-entropy patches as masked
+
+        # Remaining patches for random masking
+        high_entropy_ids = ids_sorted[:, len_low_entropy:]
+        len_high_entropy_keep = int(high_entropy_ids.shape[1] * (1 - masking_ratio))
+
+        # Random masking within high-entropy patches
+        noise = torch.rand(N, high_entropy_ids.shape[1], device=x.device)
+        ids_high_entropy_shuffle = torch.argsort(noise, dim=1)
+        ids_high_entropy_keep = high_entropy_ids.gather(
+            1, ids_high_entropy_shuffle[:, :len_high_entropy_keep]
+        )
+
+        # Combine indices
+        ids_keep = ids_high_entropy_keep  # Only keep high-entropy patches after random masking
+        ids_restore = torch.argsort(torch.cat([low_entropy_ids, high_entropy_ids], dim=1), dim=1)
+
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # Update mask
+        mask[:, len_low_entropy:len_low_entropy + len_high_entropy_keep] = 0  # Unmask the kept high-entropy patches
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        # Unmask low-entropy patches in the mask tensor for loss calculation
+        mask.scatter_(1, low_entropy_ids, 0)  # Set low-entropy patches to 0 (unmasked)
+
+        print(f"x_masked: {x_masked.shape}, mask: {mask.shape} ids_restore: {ids_restore.shape}")
+        return x_masked, mask, ids_restore
+
+            
+
+
+        
     def random_masking_variable(self, x, img_pat, masking_ratio_min=0.5, masking_ratio_max=0.75, **kwargs):
         """
         Perform per-sample random masking by per-sample shuffling.
@@ -354,7 +422,7 @@ class MaskingModule(nn.Module):
         
         Args:
         x (torch.Tensor): Input tensor of shape [N, L, D], where N is batch size,
-                          L is number of patches, and D is patch dimension.
+                        L is number of patches, and D is patch dimension.
         codec_type (str): Type of codec to simulate ('jpeg', 'png', or 'entropy').
         num_bins (int): Number of bins for entropy calculation.
         
@@ -388,7 +456,7 @@ class MaskingModule(nn.Module):
             grad_x = F.conv2d(x_reshaped, torch.tensor([[[[1, -1]]]], dtype=x.dtype, device=x.device), padding=(0, 1))
             grad_y = F.conv2d(x_reshaped, torch.tensor([[[[1], [-1]]]], dtype=x.dtype, device=x.device), padding=(1, 0))
             information = (torch.sum(torch.abs(grad_x), dim=(1, 2, 3)) + 
-                           torch.sum(torch.abs(grad_y), dim=(1, 2, 3))).view(N, L)
+                        torch.sum(torch.abs(grad_y), dim=(1, 2, 3))).view(N, L)
         
         elif codec_type == 'entropy':
             information = self.entropy(x, dim=-1, num_bins=num_bins)
@@ -404,7 +472,7 @@ class MaskingModule(nn.Module):
         
         Args:
         x (torch.Tensor): Input tensor of shape [N, L, D], where N is batch size,
-                          L is number of patches, and D is patch dimension.
+                        L is number of patches, and D is patch dimension.
         img_pat (torch.Tensor): Image patches (not used in this method, kept for consistency with other methods).
         masking_ratio (float): Ratio of patches to mask.
         codec_type (str): Type of codec to use for information calculation ('jpeg', 'png', or 'entropy').
@@ -563,7 +631,7 @@ class MaskingModule(nn.Module):
         
         
         return x_masked, mask, ids_restore
-    
+        
 if __name__ == '__main__':
     import requests
     from PIL import Image
