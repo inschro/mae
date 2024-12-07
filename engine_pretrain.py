@@ -61,10 +61,9 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = len(data_loader) // 5
+    print_freq = len(data_loader) // 5 if not epoch == 0 else 20
     masking_args = _parse_masking_args(args.masking_args)
     nan_count = 0
-    use_dali = args.use_dali
 
     accum_iter = args.accum_iter
 
@@ -81,12 +80,7 @@ def train_one_epoch(model: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, batch in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-
-        if use_dali:
-            samples = batch[0]["data"]
-        else:
-            samples, _ = batch
+    for data_iter_step, (samples, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:

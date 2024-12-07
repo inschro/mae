@@ -1,129 +1,108 @@
 # dali.py
 from nvidia.dali.pipeline import pipeline_def
-from nvidia.dali.plugin.pytorch import DALIClassificationIterator
 import nvidia.dali.fn as fn
+from nvidia.dali.plugin.pytorch import DALIClassificationIterator
+import nvidia.dali.types as dalitypes
 
+# Modify the DALI pipeline to only read and decode images
 @pipeline_def
-def dali_train_pipeline(data_path, input_size):
-    jpegs, labels = fn.readers.file(name="Reader", file_root=data_path, random_shuffle=True, initial_fill=4096)
-    jpegs.gpu()
-    images = fn.decoders.image(jpegs, device='mixed')
-    images = fn.resize(images, resize_x=input_size, resize_y=input_size)
-    images = fn.crop_mirror_normalize(
-        images,
-        crop=(input_size, input_size),
-        mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-        std=[0.229 * 255, 0.224 * 255, 0.225 * 255],
-        mirror=fn.random.coin_flip()
+def dali_train_pipeline(data_path, name="Reader", random_shuffle=True, initial_fill=4096, size=224):
+    jpegs, labels = fn.readers.file(name=name, file_root=data_path, random_shuffle=random_shuffle, initial_fill=initial_fill)
+
+    images = fn.decoders.image_random_crop(
+        jpegs,
+        device='mixed',
+        random_area=[0.25, 1.0],
     )
+
+    images = fn.resize(
+        images,
+        size=size,
+        interp_type=dalitypes.DALIInterpType.INTERP_CUBIC
+    )
+
+    flip = fn.random.coin_flip(probability=0.5)
+    images = fn.flip(images, horizontal=flip, vertical=0)
+    
     return images, labels
 
-def get_dali_dataloader(data_path, batch_size, input_size, num_threads=4, device_id=0):
-    # Create and build the DALI pipeline
-    pipeline = dali_train_pipeline(
-        batch_size=batch_size,
-        num_threads=num_threads,
-        device_id=device_id,
-        data_path=data_path,
-        input_size=input_size,
-        prefetch_queue_depth={"cpu_size": 2, "gpu_size": 4},
-    )
-    pipeline.build()
-    
-    # Create the DALI iterator
-    dali_iterator =  DALIClassificationIterator(
-        pipelines=pipeline,
-        reader_name="Reader",
-        auto_reset=False,
-    )
-    
-    return dali_iterator
-
-@pipeline_def
-def dali_linprobe_pipeline(data_path, input_size, shard_id=0, num_shards=1):
-    jpegs, labels = fn.readers.file(
-        name="reader_linprobe",
-        file_root=data_path,
-        random_shuffle=True,
-        initial_fill=1024,
-        shard_id=shard_id,
-        num_shards=num_shards
-    )
-    jpegs.gpu()
-    images = fn.decoders.image(jpegs, device='mixed')
-    images = fn.resize(images, resize_x=input_size, resize_y=input_size)
-    images = fn.crop_mirror_normalize(
-        images,
-        crop=(input_size, input_size),
-        mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-        std=[0.229 * 255, 0.224 * 255, 0.225 * 255],
-        mirror=fn.random.coin_flip()
-    )
-    return images, labels
-
-def get_dali_dataloader_linprobe_train(data_path, batch_size, input_size, num_threads=4, num_gpus=1):
-    # Create a pipeline for each GPU and store them in a list
-    pipelines = []
-    for device_id in range(num_gpus):
-        pipeline = dali_linprobe_pipeline(
+# Create a custom DaliDataloader class
+class DaliDataloader:
+    def __init__(self, data_path, batch_size, num_threads=4, device_id=0, transforms=None, name="Reader"):
+        self.pipeline = dali_train_pipeline(
             batch_size=batch_size,
+            name=name,
             num_threads=num_threads,
             device_id=device_id,
             data_path=data_path,
-            input_size=input_size,
-            shard_id=device_id,
-            num_shards=num_gpus,
             prefetch_queue_depth={"cpu_size": 2, "gpu_size": 2},
         )
-        pipeline.build()
-        pipelines.append(pipeline)
-    
-    # Create a DALI iterator with all pipelines
-    dali_iterator = DALIClassificationIterator(
-        pipelines=pipelines,
-        reader_name="reader_linprobe",
-        auto_reset=False,
-    )
-    
-    return dali_iterator
+        self.pipeline.build()
 
-def get_dali_dataloader_linprobe_val(data_path, batch_size, input_size, num_threads=4, num_gpus=1):
-    # Create a pipeline for each GPU and store them in a list
-    pipelines = []
-    for device_id in range(num_gpus):
-        pipeline = dali_linprobe_pipeline(
-            batch_size=batch_size,
-            num_threads=num_threads,
-            device_id=device_id,
-            data_path=data_path,
-            input_size=input_size,
-            shard_id=device_id,
-            num_shards=num_gpus,
-            prefetch_queue_depth={"cpu_size": 2, "gpu_size": 2},
+        # Create the DALI iterator
+        self.dali_iterator = DALIClassificationIterator(
+            pipelines=self.pipeline,
+            reader_name="Reader",
+            auto_reset=False,
         )
-        pipeline.build()
-        pipelines.append(pipeline)
+        self.transforms = transforms
+
+    def __iter__(self):
+        return self
     
-    # Create a DALI iterator with all pipelines
-    dali_iterator = DALIClassificationIterator(
-        pipelines=pipelines,
-        reader_name="reader_linprobe",
-        auto_reset=False,
-    )
-    
-    return dali_iterator
+    def __len__(self):
+        return len(self.dali_iterator)
+
+    def __next__(self):
+        try:
+            data = next(self.dali_iterator)
+        except StopIteration:
+            self.dali_iterator.reset()
+            raise StopIteration
+        images = data[0]['data']
+        labels = data[0]['label'].squeeze().long()
+
+        # Convert images from [batch_size, H, W, C] to [batch_size, C, H, W]
+        images = images.permute(0, 3, 1, 2)
+        # Convert images to float and normalize to [0, 1]
+        images = images.float() / 255.0
+
+        # Ensure labels are on the same device as images
+        labels = labels.to(images.device)
+
+        # Apply transforms
+        if self.transforms:
+            images = self.transforms(images)
+        return images, labels
+
 
 if __name__ == "__main__":
+    from torchvision import transforms
+    transform = transforms.Compose([
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
     
-    dataloader = get_dali_dataloader(
-        data_path="/media/ingo/datasets/imagenet-mini/val",
+    dataloader = DaliDataloader(
+        data_path="/beegfs/data/shared/imagenet/imagenet100/train",
         batch_size=16,
-        input_size=224,
         num_threads=2,
-        device_id=0
+        device_id=0,
+        transforms=transform,
     )
 
+
     for batch in dataloader:
-        img, label = batch[0]["data"], batch[0]["label"]
-        print(img.shape, label)
+        imgs, labels = batch
+        print(f"Images shape: {imgs.shape}, Labels shape: {labels.shape}")
+        print(f"Imgs dtype: {imgs.dtype}, Labels dtype: {labels.dtype}")
+        print(f"imgs.device: {imgs.device}, labels.device: {labels.device}")
+        print("----------------")
+
+        imgs_min, imgs_max = imgs.min(), imgs.max()
+        labels_min, labels_max = labels.min(), labels.max()
+        print(f"Images min: {imgs_min}, Images max: {imgs_max}")
+        print(f"Labels min: {labels_min}, Labels max: {labels_max}")
+        print("----------------")
+
+        print(f"First image: {imgs[0]}, \n First label: {labels[0]}")
         break

@@ -140,6 +140,33 @@ def main(args):
     num_tasks = misc.get_world_size()
     global_rank = misc.get_rank()
 
+    # Validation dataloader independent of use_dali arg
+    transform_val = transforms.Compose([
+            transforms.Resize(256, interpolation=3),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    dataset_val = datasets.ImageFolder(os.path.join(args.data_path, 'val'), transform=transform_val)
+    print(dataset_val)
+    if args.dist_eval:
+        if len(dataset_val) % num_tasks != 0:
+            print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                    'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                    'equal num of samples per-process.')
+        sampler_val = torch.utils.data.DistributedSampler(
+            dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)
+    else:
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+
+    data_loader_val = torch.utils.data.DataLoader(
+        dataset_val, sampler=sampler_val,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=False,
+        persistent_workers=True,
+    )
+
     if not args.use_dali:
         # linear probe: weak augmentation
         transform_train = transforms.Compose([
@@ -147,29 +174,11 @@ def main(args):
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-        transform_val = transforms.Compose([
-                transforms.Resize(256, interpolation=3),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
         dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-        dataset_val = datasets.ImageFolder(os.path.join(args.data_path, 'val'), transform=transform_val)
         print(dataset_train)
-        print(dataset_val)
         sampler_train = torch.utils.data.DistributedSampler(
             dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
         )
-        print("Sampler_train = %s" % str(sampler_train))
-
-        if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
-                print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                        'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                        'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
         data_loader_train = torch.utils.data.DataLoader(
             dataset_train, sampler=sampler_train,
@@ -179,31 +188,16 @@ def main(args):
             drop_last=True,
             persistent_workers=True,
         )
-
-        data_loader_val = torch.utils.data.DataLoader(
-            dataset_val, sampler=sampler_val,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_mem,
-            drop_last=False,
-            persistent_workers=True,
-        )
     else: # use dali
-        from util.dali import get_dali_dataloader_linprobe_train, get_dali_dataloader_linprobe_val
-        data_loader_train = get_dali_dataloader_linprobe_train(
-            data_path=os.path.join(args.data_path, 'train'),
+        from util.dali import DaliDataloader
+        transform = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        train_data_path = os.path.join(args.data_path, 'train')
+        data_loader_train = DaliDataloader(
+            data_path=train_data_path,
             batch_size=args.batch_size,
-            input_size=224,
             num_threads=args.num_workers,
-            num_gpus=num_tasks,
-        )
-
-        data_loader_val = get_dali_dataloader_linprobe_val(
-            data_path=os.path.join(args.data_path, 'val'),
-            batch_size=args.batch_size,
-            input_size=224,
-            num_threads=args.num_workers,
-            num_gpus=num_tasks,
+            device_id=0,
+            transforms=transform,
         )
 
     if global_rank == 0 and args.log_dir is not None and not args.eval:

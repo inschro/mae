@@ -31,7 +31,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = len(data_loader) // 5
+    print_freq = len(data_loader) // 5 if not epoch == 0 else 20
     if args is not None:
         if hasattr(args, 'print_freq'):
             print_freq = args.print_freq
@@ -44,13 +44,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, batch in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-
-        if use_dali:
-            samples = batch[0]["data"]
-            targets = batch[0]["label"].squeeze().long()
-        else:
-            samples, targets = batch
+    for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
@@ -120,13 +114,7 @@ def evaluate(data_loader, model, device, args=None):
     # switch to evaluation mode
     model.eval()
 
-    for batch in metric_logger.log_every(data_loader, 50, header):
-        if use_dali:
-            images = batch[0]["data"]
-            target = batch[0]["label"].squeeze().long()
-        else:
-            images = batch[0]
-            target = batch[-1]
+    for (images, target) in metric_logger.log_every(data_loader, 50, header):
 
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
