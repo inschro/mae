@@ -45,7 +45,7 @@ class MaskingModule(nn.Module):
 
         return x_masked, mask, ids_restore
     
-    def low_entropy_random_masking(self, x, img_pat, low_entropy_ratio=0.2, masking_ratio=0.5, **kwargs):
+    def selective_crop(self, x, img_pat, low_entropy_ratio=0.2, masking_ratio=0.5, **kwargs):
         """
         Perform masking by ignoring low-entropy patches and randomly masking the rest.
 
@@ -66,7 +66,7 @@ class MaskingModule(nn.Module):
         effective_masking_ratio = masking_ratio / (1 - low_entropy_ratio)
 
         # Calculate entropies
-        entropies = self.entropy_kde(img_pat)
+        entropies = self.entropy(img_pat,num_bins=256)
 
         # Sort patches by entropy
         ids_sorted = torch.argsort(entropies, dim=1)  # Ascending order: low entropy first
@@ -100,7 +100,7 @@ class MaskingModule(nn.Module):
 
         # Masked input tensor: Only the kept high-entropy patches
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-        print(f"x_masked: {x_masked.shape}, mask: {mask.shape} ids_restore: {ids_restore.shape}")
+        #print(f"x_masked: {x_masked.shape}, mask: {mask.shape} ids_restore: {ids_restore.shape}")
         return x_masked, mask, ids_restore
 
 

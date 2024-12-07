@@ -101,7 +101,7 @@ def run_one_image_with_low_entropy_overlay(img, model, masking_type, low_entropy
     img_patches = model.patchify(torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2))
 
     # Calculate entropy for each patch
-    entropies = masking.MaskingModule().entropy_kde(img_patches)
+    entropies = masking.MaskingModule().entropy(img_patches,num_bins=256)
     
     # run MAE
     loss, y, mask = model(x.float(), masking_type=masking_type, **masking_args)
@@ -164,7 +164,7 @@ def run_heatmap_on_image(img,model):
 
     # run MAE
     masker =  masking.MaskingModule()
-    y = masker.calculate_patch_information(x)
+    y = masker.entropy(x,num_bins=10)
     #y = masker.entropy_kde(x)
     y = y.view((1,14,14))
 
@@ -187,9 +187,9 @@ def run_heatmap_on_image(img,model):
 #img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
 #img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 #
-img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
+#img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
 #img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
-#img_url = 'https://cataas.com/cat'
+img_url = 'https://cataas.com/cat'
 
 img = Image.open(requests.get(img_url, stream=True).raw)
 #img = Image.open("/beegfs/data/shared/imagenet/imagenet100/val/n01820546/ILSVRC2012_val_00019716.JPEG")
@@ -210,13 +210,13 @@ img = img / imagenet_std
 #}
 
 masking_args = {
-    'masking_ratio': 94/196,
+    'masking_ratio': 0.55,
     'threshold': 0.4,
     'codec_type' : 'jpeg',
     'reverse' : False,
     'ratios' : [0.9,0.6,0.6,0.9], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
     'random' : False,
-    'low_entropy_ratio' : 100/196,
+    'low_entropy_ratio' : 0.2,
 }
 #torch.random.manual_seed(4)
 # chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
@@ -225,11 +225,11 @@ masking_args = {
 # run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 
 #chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/20241105191139_pretrain_maebase_random_shed6to9_imnet100_epoch200_warmup40_2080/outputs/checkpoint-80.pth'
-chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240915160349_Pretrain_IMNET1K_epoch20_entropy_binning__warmup2_modelbase/outputs/checkpoint-19.pth'
+chkpt_dir = r'C:\Users\D\Documents\Research\mae\jobs\checkpoint-19.pth'
 model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
-m = run_one_image(img, model_mae, masking_type='low_entropy_random_masking', **masking_args)
+m = run_one_image(img, model_mae, masking_type='selective_crop', **masking_args)
 run_one_image_with_low_entropy_overlay(
-    img, model_mae, masking_type='low_entropy_random_masking',im_masked=m, **masking_args
+    img, model_mae, masking_type='selective_crop',im_masked=m, **masking_args
 )
 
 #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
