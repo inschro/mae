@@ -32,3 +32,8 @@ demo/
 *.ps1
 
 run_pretraining.sh
+blub.py
+intra_patch_dist.py
+patch_dist_calc.py
+dist_across_dataset.png
+image.png
