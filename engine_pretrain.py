@@ -61,7 +61,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = len(data_loader) // 5 #if not epoch == 0 else 20
+    print_freq = len(data_loader) // 5 if not epoch == 0 else 20
     masking_args = _parse_masking_args(args.masking_args)
     nan_count = 0
 
@@ -106,10 +106,15 @@ def train_one_epoch(model: torch.nn.Module,
             continue
 
         loss /= accum_iter
-        loss_scaler(loss, optimizer, parameters=model.parameters(),
-                    update_grad=(data_iter_step + 1) % accum_iter == 0)
+        
         if (data_iter_step + 1) % accum_iter == 0:
+            loss_scaler(loss, optimizer, parameters=model.parameters(),
+                    update_grad=True)
             optimizer.zero_grad()
+        else:
+            with model.no_sync():
+                loss_scaler(loss, optimizer, parameters=model.parameters(),
+                        update_grad=False)
 
         torch.cuda.synchronize()
 

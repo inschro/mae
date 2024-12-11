@@ -67,11 +67,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             sys.exit(1)
 
         loss /= accum_iter
-        loss_scaler(loss, optimizer, clip_grad=max_norm,
-                    parameters=model.parameters(), create_graph=False,
-                    update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:
+            loss_scaler(loss, optimizer, clip_grad=max_norm,
+                    parameters=model.parameters(), create_graph=False,
+                    update_grad=True)
             optimizer.zero_grad()
+        else:
+            with model.no_sync():
+                loss_scaler(loss, optimizer, clip_grad=max_norm,
+                        parameters=model.parameters(), create_graph=False,
+                        update_grad=False)
 
         torch.cuda.synchronize()
 
@@ -106,10 +111,6 @@ def evaluate(data_loader, model, device, args=None):
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
 
-    use_dali = False
-    if args:
-        if args.use_dali:
-            use_dali = True
 
     # switch to evaluation mode
     model.eval()
