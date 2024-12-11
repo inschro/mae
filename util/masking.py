@@ -102,9 +102,66 @@ class MaskingModule(nn.Module):
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
         #print(f"x_masked: {x_masked.shape}, mask: {mask.shape} ids_restore: {ids_restore.shape}")
         return x_masked, mask, ids_restore
+    
+
+    def alpha_masking(self, x, img_pat, masking_ratio=0.75, alpha=0.25, **kwargs):
+        """
+        Perform masking based on a one-dimensional alpha value.
+        x: [N, L, D], sequence
+        img_pat: [N, L, patch_dim], image patches
+        masking_ratio: float, ratio of patches to mask
+        alpha: float, alpha value for masking
+        """
+
+        N, L, D = x.shape
+        len_keep = int(L * (1 - masking_ratio))
+
+        entropies = self.entropy(img_pat, num_bins=256)
+
+        # sort by entropy
+        ids_sorted = torch.argsort(entropies, dim=1, descending=False)
+
+        len_LE_keep = int(len_keep * (1 - alpha))
+        len_HE_keep = len_keep - len_LE_keep
+
+        LE_ids = ids_sorted[:, :L-len_keep]
+        HE_ids = ids_sorted[:, L-len_keep:]
+
+        # shuffle LE patches for random masking
+        noise = torch.rand(N, L-len_keep, device=x.device)
+        ids_LE_shuffle = torch.argsort(noise, dim=1)
+        ids_LE_keep = LE_ids.gather(1, ids_LE_shuffle[:, :len_LE_keep])
+    
+        # shuffle HE patches for random masking
+        noise = torch.rand(N, len_keep, device=x.device)
+        ids_HE_shuffle = torch.argsort(noise, dim=1)
+        ids_HE_keep = HE_ids.gather(1, ids_HE_shuffle[:, :len_HE_keep])
+
+        # combine kept patches
+        ids_keep = torch.cat([ids_LE_keep, ids_HE_keep], dim=1)
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device) 
+        mask.scatter_(1, ids_keep, 0)
+
+        # Now, we need to properly form ids_restore.
+        # In MAE-like approaches, ids_restore is used to "unshuffle" the tokens.
+        # We have now a permutation of kept tokens (ids_keep) and implicitly a set of masked tokens.
+        # Let's identify the masked tokens:
+        all_ids = torch.arange(L, device=x.device).unsqueeze(0).expand(N, -1)  # [N, L]
+        # mask == 1 are the masked tokens
+        ids_mask = all_ids[mask.bool()].view(N, L - len_keep)
+
+        # ids_all is the permutation that first places kept tokens, then masked tokens
+        ids_all = torch.cat([ids_keep, ids_mask], dim=1)  # [N, L]
+
+        # ids_restore is the inverse permutation of ids_all
+        ids_restore = torch.argsort(ids_all, dim=1)
 
 
-            
+        return x_masked, mask, ids_restore
+    
 
 
         
@@ -126,7 +183,7 @@ class MaskingModule(nn.Module):
         len_keep = int(L * (1 - masking_ratio))
 
         # compute entropy
-        entropies = self.entropy(img_pat, num_bins=10)
+        entropies = self.entropy(img_pat, num_bins=256)
         
         # sort by entropy
         descending = not reverse

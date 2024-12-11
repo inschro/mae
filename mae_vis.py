@@ -39,7 +39,7 @@ def prepare_model(chkpt_dir, arch='mae_vit_large_patch16'):
     # build model
     model = getattr(models_mae, arch)()
     # load model
-    checkpoint = torch.load(chkpt_dir, map_location='cpu')
+    checkpoint = torch.load(chkpt_dir, map_location='cpu', weights_only=False)
     msg = model.load_state_dict(checkpoint['model'], strict=False)
     print(msg)
     return model
@@ -184,15 +184,17 @@ def run_heatmap_on_image(img,model):
 
 
 # load an image
-#img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
-#img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
+# img_url = 'https://user-images.githubusercontent.com/11435359/147738734-196fd92f-9260-48d5-ba7e-bf103d29364d.jpg' # fox, from ILSVRC2012_val_00046145
+# img_url = 'https://user-images.githubusercontent.com/11435359/147743081-0428eecf-89e5-4e07-8da5-a30fd73cc0ba.jpg' # cucumber, from ILSVRC2012_val_00047851
 #
-#img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
-#img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
+# img_url = 'https://www.travelandleisure.com/thmb/h97kSvljd2QYH2nUy3Y9ZNgO_pw=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/plane-data-BUSYROUTES1217-f4f84b08d47f4951b11c148cee2c3dea.jpg'
+# img_url = 'https://www.dailypaws.com/thmb/ZHs0nxwPjwixC4YkqyRcO9DB2bg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/striped-cat-playing-flower-552781357-2000-f8b1f07162594830bdba8a24e2268ad6.jpg'
 img_url = 'https://cataas.com/cat'
 
+
+
 img = Image.open(requests.get(img_url, stream=True).raw)
-#img = Image.open("/beegfs/data/shared/imagenet/imagenet100/val/n01820546/ILSVRC2012_val_00019716.JPEG")
+# img = Image.open("/home/mae_entr/work/mae/demo/increasing_entropy_image.png")
 img = img.resize((224, 224))
 img = np.array(img) / 255.
 
@@ -210,29 +212,32 @@ img = img / imagenet_std
 #}
 
 masking_args = {
-    'masking_ratio': 0.55,
+    'masking_ratio': 0.75,
+    'alpha': 0.1,
     'threshold': 0.4,
     'codec_type' : 'jpeg',
     'reverse' : False,
-    'ratios' : [0.9,0.6,0.6,0.9], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
+    'ratios' : [0.9,1,0.8,0.5], #effective ratio = 0.2 + 0.25 + 0.3 = 0.75
     'random' : False,
-    'low_entropy_ratio' : 0.2,
+    'low_entropy_ratio' : 0.0,
 }
 #torch.random.manual_seed(4)
 # chkpt_dir = r'/home/darius/Dokumente/Research/mae/jobs/20240712135557/outputs/checkpoint-10.pth'
 # model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
 # run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
 # run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
-
-#chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/20241105191139_pretrain_maebase_random_shed6to9_imnet100_epoch200_warmup40_2080/outputs/checkpoint-80.pth'
-chkpt_dir = r'C:\Users\D\Documents\Research\mae\jobs\checkpoint-19.pth'
-model_mae = prepare_model(chkpt_dir, 'mae_vit_base_patch16')
-m = run_one_image(img, model_mae, masking_type='selective_crop', **masking_args)
-run_one_image_with_low_entropy_overlay(
-    img, model_mae, masking_type='selective_crop',im_masked=m, **masking_args
-)
+torch.random.manual_seed(69)
+#chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/selective_crop/maelarge_imnet1k_rand60_lowent20/outputs/checkpoint-latest.pth'
+chkpt_dir = r'/home/mae_entr/work/mae/jobs/experiments/selective_crop/maelarge_imnet1k_rand75_lowent10_entropyweighting_pixelwise/outputs/checkpoint-latest.pth'
+# chkpt_dir = r'/home/mae_entr/work/mae/jobs/pretrain/random75/_pretrain/random75_maelarge_random75_imnet1k_epoch400_warmup20_a100dali/outputs/checkpoint-399.pth'
+# chkpt_dir = "/home/mae_entr/work/mae/jobs/pretrain/selective_crop/maelarge_imnet1k_rand60_lowent20/outputs/checkpoint-latest.pth"
+model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
+m = run_one_image(img, model_mae, masking_type='random_masking', **masking_args)
+#run_one_image_with_low_entropy_overlay(
+#    img, model_mae, masking_type='selective_crop',im_masked=m, **masking_args
+#)
 
 #run_one_image(img, model_mae, masking_type='entropy_masking', **masking_args)
 #run_one_image(img, model_mae, masking_type='entropy_masking_bins', **masking_args)
 #run_one_image(img, model_mae, masking_type='codec_based_masking', **masking_args)
-run_heatmap_on_image(img, model_mae)
+#run_heatmap_on_image(img, model_mae)

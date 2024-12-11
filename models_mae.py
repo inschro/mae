@@ -186,7 +186,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         if entropy_weighting:
             # get patch entropies
-            entropies = self.masking_module.entropy(target, dim=-1) # [N, L]
+            entropies = self.masking_module.entropy(target, dim=-1, num_bins=256) # [N, L]
 
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)

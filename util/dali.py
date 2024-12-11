@@ -6,8 +6,15 @@ import nvidia.dali.types as dalitypes
 
 # Modify the DALI pipeline to only read and decode images
 @pipeline_def
-def dali_train_pipeline(data_path, name="Reader", random_shuffle=True, initial_fill=4096, size=224):
-    jpegs, labels = fn.readers.file(name=name, file_root=data_path, random_shuffle=random_shuffle, initial_fill=initial_fill)
+def dali_train_pipeline(data_path, name="Reader", random_shuffle=True, initial_fill=4096, size=224, shard_id=0, num_shards=1):
+    jpegs, labels = fn.readers.file(
+        name=name,
+        file_root=data_path,
+        random_shuffle=random_shuffle, 
+        initial_fill=initial_fill,
+        shard_id=shard_id,
+        num_shards=num_shards,
+    )
 
     images = fn.decoders.image_random_crop(
         jpegs,
@@ -28,10 +35,15 @@ def dali_train_pipeline(data_path, name="Reader", random_shuffle=True, initial_f
 
 # Create a custom DaliDataloader class
 class DaliDataloader:
-    def __init__(self, data_path, batch_size, num_threads=4, device_id=0, transforms=None, name="Reader"):
+    def __init__(self, data_path, batch_size, num_threads=4, transforms=None, name="Reader", num_gpus=1, input_size=224, device_id=0):
+        print(f"Creating DALI dataloader for {num_gpus} with shard_id {device_id}")
+        # Create the DALI pipeline
         self.pipeline = dali_train_pipeline(
             batch_size=batch_size,
+            size=input_size,
             name=name,
+            shard_id=device_id,
+            num_shards=num_gpus,
             num_threads=num_threads,
             device_id=device_id,
             data_path=data_path,
@@ -42,7 +54,7 @@ class DaliDataloader:
         # Create the DALI iterator
         self.dali_iterator = DALIClassificationIterator(
             pipelines=self.pipeline,
-            reader_name="Reader",
+            reader_name=name,
             auto_reset=False,
         )
         self.transforms = transforms

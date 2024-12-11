@@ -197,8 +197,9 @@ def main(args):
             data_path=args.data_path,
             batch_size=args.batch_size,
             num_threads=args.num_workers,
-            device_id=0,
             transforms=transform,
+            num_gpus=num_tasks,
+            device_id=global_rank,
         )
 
     

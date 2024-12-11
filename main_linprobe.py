@@ -195,9 +195,10 @@ def main(args):
         data_loader_train = DaliDataloader(
             data_path=train_data_path,
             batch_size=args.batch_size,
-            num_threads=args.num_workers,
-            device_id=0,
+            num_threads=2,
             transforms=transform,
+            num_gpus=num_tasks,
+            device_id=global_rank,
         )
 
     if global_rank == 0 and args.log_dir is not None and not args.eval:
